@@ -2954,22 +2954,11 @@ msgid "Reduce color noise."
 msgstr "减少颜色噪声。"
 
 #. Setting name (Shaders > Chroma Denoise)
-#. Setting name (Shaders > SSimDownscaler)
 #. Setting name (Shortcuts > )
 msgid "Threshold (THR)"
 msgstr "阈值 (THR)"
 
-#. Setting name (Shaders > SSimDownscaler)
-#. Setting name (Shortcuts > )
-msgid "Oversharp (THR)"
-msgstr "过度锐化（THR）"
-
-#. Setting description (Shaders > SSimDownscaler > Oversharp (THR))
-msgid "Extra sharpening on top of SSIM. 0 is the author's default."
-msgstr "在 SSIM 基础上额外锐化。0 为作者默认值。"
-
 #. Setting description (Shaders > Chroma Denoise > Threshold (THR))
-#. Setting description (Shaders > SSimDownscaler > Threshold (THR))
 msgid ""
 "Adjust Threshold for this shader. The default preserves the shader author's "
 "setting."
@@ -3314,6 +3303,15 @@ msgid ""
 "Refine image downscaling. Requires a smaller output size; works best with "
 "Mitchell as downscaler."
 msgstr "细化图像缩小。需要较小的输出尺寸；与 Mitchell 缩小器搭配使用效果最佳。"
+
+#. Setting name (Shaders > SSimDownscaler)
+#. Setting name (Shortcuts > )
+msgid "Oversharp (THR)"
+msgstr "过度锐化（THR）"
+
+#. Setting description (Shaders > SSimDownscaler > Oversharp (THR))
+msgid "Extra sharpening on top of SSIM. 0 is the author's default."
+msgstr "在 SSIM 基础上额外锐化。0 为作者默认值。"
 
 #. Section description (Shaders > DPID)
 msgid "Detail-preserving downscaling. Requires a smaller output size."
