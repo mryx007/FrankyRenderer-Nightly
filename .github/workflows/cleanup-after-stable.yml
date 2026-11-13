@@ -4,6 +4,9 @@ name: Remove Nightlies after stable release
 # the latest stable release is superseded by it and is deleted together with
 # its tag. The stable repository's token cannot write here, so this repository
 # checks the public stable release itself.
+# It also sets the source version to the stable version, which the next release
+# expects. That commit is pushed with this workflow's token, which never starts
+# other workflows, so no new Nightly is built for it.
 on:
   workflow_dispatch:
 
@@ -33,3 +36,37 @@ jobs:
             echo "Deleting $tag"
             gh release delete "$tag" -R "$GITHUB_REPOSITORY" --cleanup-tag --yes
           done
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - name: Set the source version to the stable version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(gh api repos/mryx007/FrankyRenderer/releases/latest --jq .tag_name)
+          version=${version#v}
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "Unexpected stable version: $version"
+            exit 1
+          fi
+          IFS=. read -r major minor patch <<< "$version"
+          patch=${patch:-0}
+          rc=src/Renderer/Renderer.rc
+          sed -i -E \
+            -e "s/^(FILEVERSION|PRODUCTVERSION) [0-9,]+/\1 $major,$minor,$patch,0/" \
+            -e "s/(VALUE \"(FileVersion|ProductVersion)\", \")[0-9.]+(\")/\1$version\3/" "$rc"
+          numbers=$(grep -cE "^(FILEVERSION|PRODUCTVERSION) $major,$minor,$patch,0" "$rc" || true)
+          strings=$(grep -cF "Version\", \"$version\"" "$rc" || true)
+          if [ "$numbers" != 2 ] || [ "$strings" != 2 ]; then
+            echo "Could not set all four version fields in $rc"
+            exit 1
+          fi
+          if git diff --quiet -- "$rc"; then
+            echo "Source version is already $version"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898699+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Set source version to $version after the stable release [skip actions]" -- "$rc"
+          git push origin HEAD:main
+          echo "Source version set to $version"
