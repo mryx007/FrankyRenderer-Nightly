@@ -57,6 +57,7 @@ template <class F> void Visit(PlaceboSettings& s, F field)
     INI_FIELD(rtxHdr);
     INI_FIELD(imageAnalysis);
     INI_FIELD(statisticsInVideo);
+    INI_FIELD(statisticsTextScale);
     INI_FIELD(sharpenStrength);
     INI_FIELD(smoothMotion);
     INI_FIELD(outputLevels);

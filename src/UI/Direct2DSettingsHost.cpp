@@ -3624,6 +3624,8 @@ void Direct2DHostWindow::BeginEdit(D2DControl* control, const D2D1_RECT_F& r, bo
         DeleteObject(m_editFont);
     // Text controls and the search box keep the 14 DIP font they are drawn
     // with. GDI renders Segoe UI medium as regular, so semibold matches it.
+    // Numbers are drawn at 13 DIP with grayscale smoothing; GDI regular with
+    // grayscale smoothing matches their stroke, ClearType makes them look thinner.
     const bool matchDrawn = (control && control->kind == ControlKind::Text) || (!control && !renameDisplay);
     m_editFont = CreateFontW(-int((matchDrawn ? 14 : 13) * scale + .5f),
                              0,
@@ -3636,12 +3638,37 @@ void Direct2DHostWindow::BeginEdit(D2DControl* control, const D2D1_RECT_F& r, bo
                              DEFAULT_CHARSET,
                              0,
                              0,
-                             CLEARTYPE_QUALITY,
+                             number ? ANTIALIASED_QUALITY : CLEARTYPE_QUALITY,
                              0,
                              MenuGdiFont());
     SendMessageW(m_edit, WM_SETFONT, reinterpret_cast<WPARAM>(m_editFont), TRUE);
-    if (matchDrawn)
+    if (matchDrawn || number)
         SendMessageW(m_edit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, 0);
+    if (number)
+    {
+        // A one-line edit draws its text at the top. Make it one line high and
+        // centre it in the box, where the number is drawn, so it does not jump.
+        // GDI sets the glyphs 1 DIP lower than DirectWrite in the same line.
+        TEXTMETRICW metrics = {};
+        if (HDC dc = GetDC(m_edit))
+        {
+            const auto old = SelectObject(dc, m_editFont);
+            GetTextMetricsW(dc, &metrics);
+            SelectObject(dc, old);
+            ReleaseDC(m_edit, dc);
+        }
+        if (metrics.tmHeight > 0)
+        {
+            const int middle = int((r.top + r.bottom) * .5f * scale + .5f);
+            SetWindowPos(m_edit,
+                         nullptr,
+                         int(r.left * scale),
+                         middle - metrics.tmHeight / 2 - int(scale + .5f),
+                         int((r.right - r.left) * scale),
+                         metrics.tmHeight,
+                         SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+    }
     SetWindowSubclass(m_edit, EditProc, 1, reinterpret_cast<DWORD_PTR>(this));
     SetFocus(m_edit);
     SendMessageW(m_edit, EM_SETSEL, 0, -1);

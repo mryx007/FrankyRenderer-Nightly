@@ -342,6 +342,13 @@ inline std::vector<D2DPage> BuildD2DPages(PlaceboSettings& s)
                     L"Statistics in Video Area",
                     &s.statisticsInVideo,
                     L"Ctrl+J statistics and image analysis sit on the picture, not in black bars."));
+        analysis.controls.push_back(D2DNumber(s,
+                                              L"Statistics Text Size (%)",
+                                              &s.statisticsTextScale,
+                                              50,
+                                              200,
+                                              10,
+                                              L"Size of the Ctrl+J statistics. 100 is the automatic size."));
         auto& mode = card(p,
                           L"Display Mode",
                           L"Switches the display to a listed mode matching the video frame rate in fullscreen and "
@@ -973,10 +980,19 @@ inline std::vector<D2DPage> BuildD2DPages(PlaceboSettings& s)
             for (int i = 0; i < info.count; i++)
             {
                 const auto& param = info.parameters[i];
+                // ANTIRING is set by Global Anti-Ringing, so it has no row of its own.
+                if (!strcmp(param.name, GlobalAntiringParameter))
+                    continue;
                 D2DControl n;
                 n.name = ShaderParameterLabel(param.name) + L" (" + D2DWide(param.name) + L")";
                 n.desc = std::wstring(L"Adjust ") + ShaderParameterLabel(param.name) +
                          L" for this shader. The default preserves the shader author's setting.";
+                // In SSimDownscaler THR is the extra sharpening ("oversharp").
+                if (IsSsimDownscaler(info.file) && !strcmp(param.name, "THR"))
+                {
+                    n.name = L"Oversharp (THR)";
+                    n.desc = L"Extra sharpening on top of SSIM. 0 is the author's default.";
+                }
                 // A whole number that is only 0 or 1 switches a shader variant on or off.
                 const bool onOff = param.integer && param.minimum == 0 && param.maximum == 1;
                 n.kind = onOff           ? ControlKind::Toggle

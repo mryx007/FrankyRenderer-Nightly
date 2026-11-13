@@ -109,6 +109,8 @@ struct PlaceboBackend::State
     TonalHook tonalHook;
     const pl_hook* userHooks[ShaderCount] = {};
     ShaderConfig userCached[ShaderCount];
+    // Global anti-ringing strength each parsed shader was given (ANTIRING).
+    float userAntiring[ShaderCount] = {};
     bool userFailed[ShaderCount] = {};
     // Shaders compiled on a worker device, once per session; see ShaderWarmup.h.
     std::shared_ptr<ShaderWarmupJob> warmups[ShaderCount];
@@ -184,15 +186,18 @@ struct PlaceboBackend::State
     {
         const auto& c = settings.userShaders.shaders[id];
         auto& cached = userCached[id];
+        const float antiring = options ? options->params.antiringing_strength : 0.f;
         const bool same = c.enabled == cached.enabled && c.overrides == cached.overrides &&
-                          std::equal(std::begin(c.values), std::end(c.values), std::begin(cached.values));
+                          std::equal(std::begin(c.values), std::end(c.values), std::begin(cached.values)) &&
+                          userAntiring[id] == antiring;
         if (same && userFailed[id])
             return false;
         if (same && userHooks[id])
             return true;
         userFailed[id] = false;
         cached = c;
-        const pl_hook* hook = ParseUserShader(d3d->gpu, id, c);
+        userAntiring[id] = antiring;
+        const pl_hook* hook = ParseUserShader(d3d->gpu, id, c, antiring);
         if (!hook)
         {
             Trace("Shader failed to load: %s", ShaderCatalog[id].file);
@@ -1980,7 +1985,7 @@ struct PlaceboBackend::State
                 // in linear light it overshoots into ringing.
                 const float source = pl_rect_w(image.crop) * pl_rect_h(image.crop),
                             output = pl_rect_w(target.crop) * pl_rect_h(target.crop);
-                if (!strcmp(ShaderCatalog[id].file, "SSimDownscaler_RT.glsl") && std::abs(output) < std::abs(source))
+                if (IsSsimDownscaler(ShaderCatalog[id].file) && std::abs(output) < std::abs(source))
                     params.disable_linear_scaling = true;
             }
             else
@@ -2128,7 +2133,8 @@ struct PlaceboBackend::State
                                         statisticsText,
                                         target.planes[0].texture->params.w,
                                         target.planes[0].texture->params.h,
-                                        window))
+                                        window,
+                                        settings.statisticsTextScale))
             {
                 const int index = target.num_overlays;
                 statisticsBitmap.Describe(overlays[index], parts[index], placement);

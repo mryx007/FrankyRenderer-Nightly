@@ -110,3 +110,5 @@
 - Added "Remember Last Page" (General > Appearance, formerly Themes): the settings window reopens where it was closed.
 - Fixed stretched subtitles in MPC-BE when the window size does not change after opening ([#28](https://github.com/mryx007/FrankyRenderer/issues/28)).
 - Better performance: less CPU work per frame (RTX Video, HDR displays, software decoding) and a smoother settings menu.
+- Added "Statistics Text Size" (General > Image Analysis): makes the Ctrl+J statistics larger or smaller, per display ([#30](https://github.com/mryx007/FrankyRenderer/issues/30)).
+- Added SSimDownscaler_AR (Shaders): SSimDownscaler with anti-ringing at hard edges, controlled by Global Anti-Ringing. SSimDownscaler's THR is now called Oversharp.

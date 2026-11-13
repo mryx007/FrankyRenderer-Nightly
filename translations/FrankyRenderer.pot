@@ -163,6 +163,15 @@ msgstr ""
 msgid "Ctrl+J statistics and image analysis sit on the picture, not in black bars."
 msgstr ""
 
+#. Setting name (General > Image Analysis)
+#. Setting name (Shortcuts > )
+msgid "Statistics Text Size (%)"
+msgstr ""
+
+#. Setting description (General > Image Analysis > Statistics Text Size (%))
+msgid "Size of the Ctrl+J statistics. 100 is the automatic size."
+msgstr ""
+
 #. Section heading (General)
 #. Setting name (Shortcuts > )
 msgid "Display Mode"
@@ -2719,13 +2728,11 @@ msgid "Reduce color noise."
 msgstr ""
 
 #. Setting name (Shaders > Chroma Denoise)
-#. Setting name (Shaders > SSimDownscaler)
 #. Setting name (Shortcuts > )
 msgid "Threshold (THR)"
 msgstr ""
 
 #. Setting description (Shaders > Chroma Denoise > Threshold (THR))
-#. Setting description (Shaders > SSimDownscaler > Threshold (THR))
 msgid "Adjust Threshold for this shader. The default preserves the shader author's setting."
 msgstr ""
 
@@ -3021,6 +3028,15 @@ msgstr ""
 
 #. Section description (Shaders > SSimDownscaler)
 msgid "Refine image downscaling. Requires a smaller output size; works best with Mitchell as downscaler."
+msgstr ""
+
+#. Setting name (Shaders > SSimDownscaler)
+#. Setting name (Shortcuts > )
+msgid "Oversharp (THR)"
+msgstr ""
+
+#. Setting description (Shaders > SSimDownscaler > Oversharp (THR))
+msgid "Extra sharpening on top of SSIM. 0 is the author's default."
 msgstr ""
 
 #. Section description (Shaders > DPID)

@@ -178,6 +178,7 @@ static PlaceboSettings Salvage(const PlaceboSettings& loaded)
         FIELD(rtxHdr),
         FIELD(imageAnalysis),
         FIELD(statisticsInVideo),
+        FIELD(statisticsTextScale),
         FIELD(displayModeSwitch),
         COPY_TEXT(displayModes),
         FIELD(displayModeDelay),
@@ -446,6 +447,12 @@ PlaceboSettings LoadSettings(const std::wstring& display)
         settings.maximumFramesInFlight = static_cast<int>(value);
     size = 4;
     value = 0;
+    if (RegQueryValueExW(key, L"StatisticsTextScale", nullptr, &type, reinterpret_cast<BYTE*>(&value), &size) ==
+            ERROR_SUCCESS &&
+        type == REG_DWORD && size == 4 && value >= 50 && value <= 200)
+        settings.statisticsTextScale = static_cast<int>(value);
+    size = 4;
+    value = 0;
     if (RegQueryValueExW(key, L"PresentAhead", nullptr, &type, reinterpret_cast<BYTE*>(&value), &size) ==
             ERROR_SUCCESS &&
         type == REG_DWORD && size == 4 && value <= 4)
@@ -579,7 +586,8 @@ HRESULT ValidateSettings(const PlaceboSettings& s)
         s.displayContrast > 1000000 || s.displayPrimaries < 0 || s.displayPrimaries > 5)
         return E_INVALIDARG;
     if ((s.imageAnalysis != FALSE && s.imageAnalysis != TRUE) ||
-        (s.statisticsInVideo != FALSE && s.statisticsInVideo != TRUE))
+        (s.statisticsInVideo != FALSE && s.statisticsInVideo != TRUE) || s.statisticsTextScale < 50 ||
+        s.statisticsTextScale > 200)
         return E_INVALIDARG;
     if ((s.rtxSuperResolution != FALSE && s.rtxSuperResolution != TRUE) || (s.rtxHdr != FALSE && s.rtxHdr != TRUE))
         return E_INVALIDARG;
@@ -679,6 +687,7 @@ RenderSettings BackendSettings(const PlaceboSettings& s)
     out.rtxHdr = !!s.rtxHdr;
     out.imageAnalysis = !!s.imageAnalysis;
     out.statisticsInVideo = !!s.statisticsInVideo;
+    out.statisticsTextScale = s.statisticsTextScale;
     out.sharpenStrength = s.sharpenStrength;
     out.peakDetect = !!s.peakDetect;
     out.allowDelayedPeak = !!s.allowDelayedPeak;
@@ -809,6 +818,7 @@ static HRESULT WriteSettings(const PlaceboSettings& s)
     save(L"RtxHdr", REG_DWORD, &s.rtxHdr, 4);
     save(L"ImageAnalysis", REG_DWORD, &s.imageAnalysis, 4);
     save(L"StatisticsInVideo", REG_DWORD, &s.statisticsInVideo, 4);
+    save(L"StatisticsTextScale", REG_DWORD, &s.statisticsTextScale, 4);
     save(L"DisplayModeSwitch", REG_DWORD, &s.displayModeSwitch, 4);
     save(L"DisplayModes", REG_SZ, s.displayModes, static_cast<DWORD>((wcslen(s.displayModes) + 1) * 2));
     save(L"DisplayModeDelay", REG_BINARY, &s.displayModeDelay, 4);

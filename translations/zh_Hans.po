@@ -177,6 +177,15 @@ msgid ""
 "Ctrl+J statistics and image analysis sit on the picture, not in black bars."
 msgstr "Ctrl+J 统计信息和图像分析显示在画面上，而不是黑边中。"
 
+#. Setting name (General > Image Analysis)
+#. Setting name (Shortcuts > )
+msgid "Statistics Text Size (%)"
+msgstr "统计信息文字大小（%）"
+
+#. Setting description (General > Image Analysis > Statistics Text Size (%))
+msgid "Size of the Ctrl+J statistics. 100 is the automatic size."
+msgstr "Ctrl+J 统计信息的大小。100 为自动大小。"
+
 #. Section heading (General)
 #. Setting name (Shortcuts > )
 msgid "Display Mode"
@@ -2949,6 +2958,15 @@ msgstr "减少颜色噪声。"
 #. Setting name (Shortcuts > )
 msgid "Threshold (THR)"
 msgstr "阈值 (THR)"
+
+#. Setting name (Shaders > SSimDownscaler)
+#. Setting name (Shortcuts > )
+msgid "Oversharp (THR)"
+msgstr "过度锐化（THR）"
+
+#. Setting description (Shaders > SSimDownscaler > Oversharp (THR))
+msgid "Extra sharpening on top of SSIM. 0 is the author's default."
+msgstr "在 SSIM 基础上额外锐化。0 为作者默认值。"
 
 #. Setting description (Shaders > Chroma Denoise > Threshold (THR))
 #. Setting description (Shaders > SSimDownscaler > Threshold (THR))

@@ -184,6 +184,15 @@ msgid ""
 msgstr ""
 "Ctrl+J-Statistik und Bildanalyse stehen im Bild, nicht in schwarzen Balken."
 
+#. Setting name (General > Image Analysis)
+#. Setting name (Shortcuts > )
+msgid "Statistics Text Size (%)"
+msgstr "Textgröße der Statistik (%)"
+
+#. Setting description (General > Image Analysis > Statistics Text Size (%))
+msgid "Size of the Ctrl+J statistics. 100 is the automatic size."
+msgstr "Größe der Ctrl+J-Statistik. 100 ist die automatische Größe."
+
 #. Section heading (General)
 #. Setting name (Shortcuts > )
 msgid "Display Mode"
@@ -3233,6 +3242,15 @@ msgstr "Verringert Farbrauschen."
 #. Setting name (Shortcuts > )
 msgid "Threshold (THR)"
 msgstr "Schwellenwert (THR)"
+
+#. Setting name (Shaders > SSimDownscaler)
+#. Setting name (Shortcuts > )
+msgid "Oversharp (THR)"
+msgstr "Überschärfung (THR)"
+
+#. Setting description (Shaders > SSimDownscaler > Oversharp (THR))
+msgid "Extra sharpening on top of SSIM. 0 is the author's default."
+msgstr "Zusätzliche Schärfe zu SSIM. 0 ist die Vorgabe des Autors."
 
 #. Setting description (Shaders > Chroma Denoise > Threshold (THR))
 #. Setting description (Shaders > SSimDownscaler > Threshold (THR))

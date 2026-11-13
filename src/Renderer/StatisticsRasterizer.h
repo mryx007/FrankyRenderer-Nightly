@@ -29,6 +29,7 @@ class StatisticsRasterizer
         int width, height;
         uint64_t generation;
         HWND window;
+        int textScale; // percent of the automatic size
     };
 
     std::mutex mutex;
@@ -42,7 +43,7 @@ class StatisticsRasterizer
     // The box never shrinks and the font never grows while the view size
     // stays the same, so changing numbers and a row that comes and goes (Queue
     // while playing) do not make it jitter. Worker thread only.
-    int keptWidth = 0, keptHeight = 0, keptViewWidth = 0, keptViewHeight = 0, keptFont = 0;
+    int keptWidth = 0, keptHeight = 0, keptViewWidth = 0, keptViewHeight = 0, keptFont = 0, keptTextScale = 0;
     uint64_t keptGeneration = 0;
 
     // Statistics text markup: a line "\x01Title" is a section heading, a line
@@ -127,7 +128,9 @@ class StatisticsRasterizer
         // Sections are separated by half a line.
         const auto contentHeight = [&](int lineHeight)
         { return int(lines.size()) * lineHeight + gaps * lineHeight / 2 + 16; };
-        int fontHeight = std::clamp(viewHeight / 45, 10, 24);
+        // 1/45 of the view height, at most 24 pixels, scaled by the setting.
+        const int automatic = std::clamp(viewHeight / 45, 10, 24);
+        int fontHeight = std::max(10, (automatic * std::clamp(request.textScale, 50, 200) + 50) / 100);
         if (maxFont > 0)
             fontHeight = std::min(fontHeight, maxFont);
         while (fontHeight > 10 && contentHeight(fontHeight + std::max(4, fontHeight / 3)) > viewHeight)
@@ -296,7 +299,7 @@ class StatisticsRasterizer
                 pending.reset();
             }
             const bool same = request->generation == keptGeneration && request->width == keptViewWidth &&
-                              request->height == keptViewHeight;
+                              request->height == keptViewHeight && request->textScale == keptTextScale;
             std::optional<Image> image;
             try
             {
@@ -313,6 +316,7 @@ class StatisticsRasterizer
                 keptViewWidth = request->width;
                 keptViewHeight = request->height;
                 keptGeneration = request->generation;
+                keptTextScale = request->textScale;
             }
             {
                 std::lock_guard guard(mutex);
@@ -352,7 +356,7 @@ class StatisticsRasterizer
         ready.reset();
     }
 
-    bool Submit(const std::wstring& text, int width, int height, HWND window = nullptr) noexcept
+    bool Submit(const std::wstring& text, int width, int height, HWND window = nullptr, int textScale = 100) noexcept
     {
         try
         {
@@ -361,7 +365,7 @@ class StatisticsRasterizer
                 return false;
             if (!worker.joinable())
                 worker = std::thread([this] { Run(); });
-            pending = Request{text, width, height, generation, window};
+            pending = Request{text, width, height, generation, window, textScale};
             wake.notify_one();
             return true;
         }

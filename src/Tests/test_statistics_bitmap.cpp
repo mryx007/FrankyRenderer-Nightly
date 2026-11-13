@@ -68,6 +68,23 @@ int main()
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE))
             DispatchMessageW(&msg);
         Check(notifications > 0, "completion wakes a paused window");
+        // Text size: 100 % is the automatic size (at most 24 pixels), the
+        // setting scales it, and it shrinks only when the view is too small.
+        Check(raster.Submit(L"display 120 Hz\nwhite text", 3840, 2160), "automatic size");
+        const auto automatic = Wait(raster, 3840);
+        Check(automatic && automatic->fontHeight == 24, "automatic text size is at most 24 pixels");
+        Check(raster.Submit(L"display 120 Hz\nwhite text", 3841, 2160, nullptr, 150), "larger size");
+        const auto larger = Wait(raster, 3841);
+        Check(larger && larger->fontHeight == 36, "150 percent of the automatic size");
+        Check(raster.Submit(L"display 120 Hz\nwhite text", 3842, 2160, nullptr, 50), "smaller size");
+        const auto smaller = Wait(raster, 3842);
+        Check(smaller && smaller->fontHeight == 12, "50 percent of the automatic size");
+        std::wstring tall;
+        for (int i = 0; i < 20; i++)
+            tall += L"line\n";
+        Check(raster.Submit(tall, 801, 600, nullptr, 200), "larger size in a small view");
+        const auto shrunk = Wait(raster, 801);
+        Check(shrunk && shrunk->fontHeight < 26 && shrunk->height <= 600, "the text shrinks to fit the view");
         std::wstring large;
         for (int i = 0; i < 2000; i++)
             large += L"obsolete statistics\n";

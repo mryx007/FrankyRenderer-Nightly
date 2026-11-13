@@ -96,6 +96,7 @@ struct RenderSettings
     bool rtxSuperResolution = false, rtxHdr = false;
     bool imageAnalysis = false;
     bool statisticsInVideo = false; // statistics and analysis follow the picture
+    int statisticsTextScale = 100;  // statistics text size in percent of the automatic size
     std::optional<ScalingSettings> scaling;
     float motionRadius = 0;
     bool iccEnabled = false, lutEnabled = false;
