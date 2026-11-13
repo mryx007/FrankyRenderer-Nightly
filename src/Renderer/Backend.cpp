@@ -221,6 +221,10 @@ struct PlaceboBackend::State
     uint64_t messageUntil = 0;
     ImageAnalysis imageAnalysis;
     std::atomic<bool> showStatistics = false;
+    std::atomic<bool> sourceInterlaced = false;
+    // Field of the picture being rendered, kept before RTX Video replaces the
+    // picture with its progressive output; the statistics report this one.
+    pl_field statisticsField = PL_FIELD_NONE;
     std::string sourceCodec;
     double statisticsFps = 0;
     bool statisticsDirect = false;
@@ -1312,10 +1316,9 @@ struct PlaceboBackend::State
             else
                 value << (settings.smoothMotion ? L"off (not needed / no frame mix)" : L"off (settings)");
         }
-        row(L"Deinterlacing") << (image.field == PL_FIELD_NONE  ? L"off (progressive / not active)"
-                                  : settings.deinterlacing == 2 ? L"Yadif"
-                                  : settings.deinterlacing == 1 ? L"Bwdif"
-                                                                : L"off (settings)");
+        row(L"Deinterlacing") << (statisticsField != PL_FIELD_NONE ? (settings.deinterlacing == 2 ? L"Yadif" : L"Bwdif")
+                                  : sourceInterlaced && !settings.deinterlacing ? L"off (settings)"
+                                                                                : L"off (progressive / not active)");
         row(L"Debanding") << (settings.deband ? L"on" : L"off");
         row(L"Sharpening") << L"adaptive sharpen "
                            << (sharpenState == 1   ? L"on"
@@ -1387,7 +1390,7 @@ struct PlaceboBackend::State
         // Time available per rendered picture: one refresh with Smooth Motion,
         // otherwise one video frame (one field when deinterlacing).
         const double budget = mixing && settings.smoothMotion && period > 0 ? period / 1e4
-                              : statisticsFps > 0 ? 1000 / statisticsFps / (image.field != PL_FIELD_NONE ? 2 : 1)
+                              : statisticsFps > 0 ? 1000 / statisticsFps / (statisticsField != PL_FIELD_NONE ? 2 : 1)
                                                   : period / 1e4;
         // Show recent sustained render load. A single expensive cache build
         // must not dominate the display for five seconds as a peak did.
@@ -1774,6 +1777,7 @@ struct PlaceboBackend::State
             }
         } processed{image, mixFrames, image};
 
+        statisticsField = image.field;
         std::vector<std::shared_ptr<RtxScaling::Frame>> rtxFrames;
         rtxUpscaled = rtxDirect = false;
         probe.Next(RenderProbe::Rtx);
@@ -3356,6 +3360,11 @@ int PlaceboBackend::SharpenState() const
 void PlaceboBackend::ShowStatistics(bool enabled)
 {
     state->showStatistics = enabled;
+}
+
+void PlaceboBackend::SetSourceInterlaced(bool interlaced)
+{
+    state->sourceInterlaced = interlaced;
 }
 
 void PlaceboBackend::ShowMessage(const std::wstring& text)

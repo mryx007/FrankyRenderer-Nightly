@@ -1436,6 +1436,7 @@ HRESULT Renderer::Receive(IMediaSample* sample)
               start,
               stop);
     }
+    backend.SetSourceInterlaced(interlaced);
     const bool fields = algorithm && interlaced && timed;
     const bool smooth = smoothEnabled && timed && sample->IsPreroll() != S_OK;
     if (buffering && (smoothBuffering != smooth || bufferedLookahead != motionLookahead))

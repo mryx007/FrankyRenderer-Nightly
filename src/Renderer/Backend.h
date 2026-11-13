@@ -183,6 +183,8 @@ class PlaceboBackend
     int CacheLoadedObjects() const;
     int CacheObjects() const;
     void ShowStatistics(bool enabled);
+    // The decoder marks the video as interlaced, whether or not it is deinterlaced.
+    void SetSourceInterlaced(bool interlaced);
     // Short text in the picture for about two seconds, e.g. after a shortcut.
     void ShowMessage(const std::wstring& text);
     bool StatisticsVisible() const;

@@ -112,3 +112,4 @@
 - Better performance: less CPU work per frame (RTX Video, HDR displays, software decoding) and a smoother settings menu.
 - Added "Statistics Text Size" (General > Image Analysis): makes the Ctrl+J statistics larger or smaller, per display ([#30](https://github.com/mryx007/FrankyRenderer/issues/30)).
 - Added SSimDownscaler_AR (Shaders): SSimDownscaler with anti-ringing at hard edges, controlled by Global Anti-Ringing. SSimDownscaler's THR is now called Oversharp.
+- Fixed Ctrl+J showing deinterlacing as off with RTX Video HDR; it says "off (settings)" when deinterlacing is switched off ([#31](https://github.com/mryx007/FrankyRenderer/issues/31)).
