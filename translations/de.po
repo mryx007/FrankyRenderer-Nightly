@@ -3238,22 +3238,11 @@ msgid "Reduce color noise."
 msgstr "Verringert Farbrauschen."
 
 #. Setting name (Shaders > Chroma Denoise)
-#. Setting name (Shaders > SSimDownscaler)
 #. Setting name (Shortcuts > )
 msgid "Threshold (THR)"
 msgstr "Schwellenwert (THR)"
 
-#. Setting name (Shaders > SSimDownscaler)
-#. Setting name (Shortcuts > )
-msgid "Oversharp (THR)"
-msgstr "Überschärfung (THR)"
-
-#. Setting description (Shaders > SSimDownscaler > Oversharp (THR))
-msgid "Extra sharpening on top of SSIM. 0 is the author's default."
-msgstr "Zusätzliche Schärfe zu SSIM. 0 ist die Vorgabe des Autors."
-
 #. Setting description (Shaders > Chroma Denoise > Threshold (THR))
-#. Setting description (Shaders > SSimDownscaler > Threshold (THR))
 msgid ""
 "Adjust Threshold for this shader. The default preserves the shader author's "
 "setting."
@@ -3667,6 +3656,15 @@ msgid ""
 msgstr ""
 "Verbessert das Herunterskalieren. Benötigt eine kleinere Ausgabeauflösung; "
 "funktioniert am besten mit Mitchell als Filter zum Verkleinern."
+
+#. Setting name (Shaders > SSimDownscaler)
+#. Setting name (Shortcuts > )
+msgid "Oversharp (THR)"
+msgstr "Überschärfung (THR)"
+
+#. Setting description (Shaders > SSimDownscaler > Oversharp (THR))
+msgid "Extra sharpening on top of SSIM. 0 is the author's default."
+msgstr "Zusätzliche Schärfe zu SSIM. 0 ist die Vorgabe des Autors."
 
 #. Section description (Shaders > DPID)
 msgid "Detail-preserving downscaling. Requires a smaller output size."
