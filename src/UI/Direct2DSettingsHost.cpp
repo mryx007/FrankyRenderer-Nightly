@@ -101,8 +101,6 @@ static constexpr const wchar_t* MenuTexts[] = {L"Key name: Ctrl",
                                                L"None saved yet.",
                                                L"Display",
                                                L"Rename",
-                                               L"Import",
-                                               L"Export",
                                                L"Reset Page",
                                                L"Reset Shader",
                                                L"Input",
@@ -280,8 +278,6 @@ struct HitRegion
         ResetBtn,
         ResetAllBtn,
         ApplyBtn,
-        ImportBtn,
-        ExportBtn,
         DisplayProfile,
         QualityPresetBtn,
         ProfileSelectBtn,
@@ -786,6 +782,8 @@ class Direct2DHostWindow
             if (m_preview)
                 m_preview(m_base);
         }
+        // Slider changes of the last moments are still waiting for the file.
+        SettingsStore::Flush();
         if (m_measureThread.joinable())
         {
             m_measurement->cancel = true;
@@ -1351,31 +1349,11 @@ void Direct2DHostWindow::Render()
             navY += 30.0f;
         }
 
-        // 4. Sidebar Bottom Action Buttons
-        float btnY = size.height - 48.0f;
-        const float transferY = btnY;
-        for (int i = 0; i < 2; ++i)
-        {
-            const float buttonWidth = (sidebarW - 40.f) / 2.f;
-            const float left = i ? sidebarW / 2.f + 4.f : 16.f;
-            const auto rect = D2D1::RectF(left, transferY, left + buttonWidth, transferY + 34.f);
-            m_pRenderTarget->FillRoundedRectangle(D2D1::RoundedRect(rect, 6, 6), m_brushInputBg.Get());
-            m_pRenderTarget->DrawRoundedRectangle(D2D1::RoundedRect(rect, 6, 6), m_brushBorderCard.Get(), 1.f);
-            auto text = rect;
-            text.top += 8;
-            m_fmtNav->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-            const auto transferLabel = Tr(i ? L"Export" : L"Import");
-            m_pRenderTarget->DrawText(
-                transferLabel.c_str(), UINT32(transferLabel.size()), m_fmtNav.Get(), text, m_brushTextMain.Get());
-            m_fmtNav->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
-            HitRegion hit;
-            hit.type = i ? HitRegion::ExportBtn : HitRegion::ImportBtn;
-            hit.rect = rect;
-            m_hitRegions.push_back(hit);
-        }
+        // 4. Status at the bottom of the sidebar (import and export are on
+        // the Profiles page).
         if (!m_error.empty())
         {
-            const float statusBottom = transferY - 8.f;
+            const float statusBottom = size.height - 16.f;
             const auto r = D2D1::RectF(16, statusBottom - 57.f, sidebarW - 16, statusBottom);
             const auto status = Tr(m_error);
             m_pRenderTarget->DrawText(status.c_str(),
@@ -2990,6 +2968,9 @@ void Direct2DHostWindow::TransferIni(bool importing)
         const std::string message = ex.what();
         m_error.assign(message.begin(), message.end());
     }
+    // The sidebar holding m_error is usually closed.
+    if (!m_error.empty())
+        ShowToast(Tr(m_error));
     InvalidateRect(m_hwnd, nullptr, FALSE);
 }
 
@@ -3452,6 +3433,13 @@ void Direct2DHostWindow::ResetControl(D2DControl& c)
 // shown were replaced and the change needs no further handling.
 bool Direct2DHostWindow::HandleProfileRequests()
 {
+    if (ProfilePage::g_requestTransfer)
+    {
+        const bool importing = ProfilePage::g_requestTransfer == 1;
+        ProfilePage::g_requestTransfer = 0;
+        TransferIni(importing);
+        return true;
+    }
     if (!ProfilePage::g_notice.empty())
     {
         ShowToast(ProfilePage::g_notice);
@@ -3962,12 +3950,6 @@ void Direct2DHostWindow::OnLButtonDown(float x, float y)
             const auto rect = h.rect;
             SelectProfileMenu(rect);
             return;
-        }
-        else if (h.type == HitRegion::ImportBtn || h.type == HitRegion::ExportBtn)
-        {
-            TransferIni(h.type == HitRegion::ImportBtn);
-            if (!*alive)
-                return;
         }
         else if (h.type == HitRegion::ApplyBtn)
         {

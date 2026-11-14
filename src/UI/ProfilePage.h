@@ -5,8 +5,11 @@
 // choosing it at the top of the menu (see the host). Included by
 // Direct2DSettingsHost.cpp after the settings model. Changes are saved at once.
 #include "Settings/ContentProfiles.h"
+#include "Settings/SettingsStore.h"
+#include <shlobj.h>
 #include <shobjidl.h>
 #include <memory>
+#pragma comment(lib, "shell32.lib")
 
 namespace ProfilePage
 {
@@ -27,6 +30,8 @@ inline bool g_selectionRequested = false;
 inline std::wstring g_requestSelection;
 // A short notice the host shows, e.g. why a folder was not added.
 inline std::wstring g_notice;
+// Import (1) or export (2) an INI file with the host's file dialog.
+inline int g_requestTransfer = 0;
 // A profile renamed on the page, so the menu keeps showing it.
 inline std::wstring g_renamedFrom, g_renamedTo;
 
@@ -161,6 +166,46 @@ inline std::wstring Fill(std::wstring text, const std::wstring& value)
     if (const auto at = text.find(L"%s"); at != std::wstring::npos)
         text.replace(at, 2, value);
     return text;
+}
+
+// Shows Settings.ini in Explorer, or its folder before anything is saved.
+inline void OpenSettingsFolder()
+{
+    const auto folder = SettingsStore::Folder();
+    if (folder.empty())
+        return;
+    SettingsStore::Flush();
+    std::error_code error;
+    std::filesystem::create_directories(folder, error);
+    const auto file = SettingsStore::IniPath();
+    if (GetFileAttributesW(file.c_str()) != INVALID_FILE_ATTRIBUTES)
+        if (const auto item = ILCreateFromPathW(file.c_str()))
+        {
+            const auto result = SHOpenFolderAndSelectItems(item, 0, nullptr, 0);
+            ILFree(item);
+            if (SUCCEEDED(result))
+                return;
+        }
+    ShellExecuteW(nullptr, L"open", folder.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+}
+
+// Where the settings are kept, and copies of them in other INI files.
+inline void SettingsFileCard(D2DPage& page)
+{
+    D2DCard card{L"Settings File", L"", {}, DefaultTab};
+    auto folder = D2DAction(
+        L"Settings Folder", L"Open", [](HWND) { OpenSettingsFolder(); }, L"Opens the folder with Settings.ini.");
+    folder.detail = []
+    {
+        const auto path = SettingsStore::IniPath();
+        return path.empty() ? std::wstring(L"Opens the folder with Settings.ini.") : path;
+    };
+    card.controls.push_back(std::move(folder));
+    card.controls.push_back(D2DAction(
+        L"Import Settings", L"Import", [](HWND) { g_requestTransfer = 1; }, L"Loads settings from an INI file."));
+    card.controls.push_back(D2DAction(
+        L"Export Settings", L"Export", [](HWND) { g_requestTransfer = 2; }, L"Saves settings to an INI file."));
+    page.cards.push_back(std::move(card));
 }
 
 // The Default tab: which display's normal settings the menu shows.
@@ -351,6 +396,7 @@ inline D2DPage Build(const PlaceboSettings& settings)
     D2DPage page{L"Profiles", L"\xE8B7", L"Profiles", L"Different settings for videos from chosen folders.", {}};
     if (!devices.empty())
         DefaultCards(page, display, devices);
+    SettingsFileCard(page);
     for (size_t i = 0; i < profiles.size(); ++i)
         ProfileCards(page, i, devices);
 

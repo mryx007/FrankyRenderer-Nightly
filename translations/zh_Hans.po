@@ -3907,3 +3907,35 @@ msgstr "高质量"
 #. Quality preset description (header)
 msgid "Sharpest picture. For dedicated GPUs."
 msgstr "画面最锐利。适用于独立显卡。"
+
+#. Section heading (Profiles)
+msgid "Settings File"
+msgstr "设置文件"
+
+#. Setting name (Profiles > Settings File)
+msgid "Settings Folder"
+msgstr "设置文件夹"
+
+#. Setting description (Profiles > Settings File > Settings Folder)
+msgid "Opens the folder with Settings.ini."
+msgstr "打开 Settings.ini 所在的文件夹。"
+
+#. Button (Profiles > Settings File > Settings Folder)
+msgid "Open"
+msgstr "打开"
+
+#. Setting name (Profiles > Settings File)
+msgid "Import Settings"
+msgstr "导入设置"
+
+#. Setting description (Profiles > Settings File > Import Settings)
+msgid "Loads settings from an INI file."
+msgstr "从 INI 文件加载设置。"
+
+#. Setting name (Profiles > Settings File)
+msgid "Export Settings"
+msgstr "导出设置"
+
+#. Setting description (Profiles > Settings File > Export Settings)
+msgid "Saves settings to an INI file."
+msgstr "将设置保存到 INI 文件。"

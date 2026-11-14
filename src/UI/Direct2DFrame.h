@@ -356,13 +356,7 @@ class Direct2DFrame
         savedSize = {};
         SIZE value = {};
         DWORD bytes = sizeof(value);
-        if (RegGetValueW(HKEY_CURRENT_USER,
-                         MenuAppearanceKey().c_str(),
-                         L"WindowSize",
-                         RRF_RT_REG_BINARY,
-                         nullptr,
-                         &value,
-                         &bytes) == ERROR_SUCCESS &&
+        if (SettingsStore::Get(MenuAppearanceKey(), L"WindowSize", REG_BINARY, &value, &bytes) == ERROR_SUCCESS &&
             bytes == sizeof(value) && value.cx >= 640 && value.cy >= 400 && value.cx <= 16384 && value.cy <= 16384)
             savedSize = value;
     }
@@ -376,15 +370,7 @@ class Direct2DFrame
             return;
         const UINT dpi = GetDpiForWindow(host);
         savedSize = {MulDiv(bounds.right - bounds.left, 96, dpi), MulDiv(bounds.bottom - bounds.top, 96, dpi)};
-        HKEY key = nullptr;
-        if (RegCreateKeyExW(
-                HKEY_CURRENT_USER, MenuAppearanceKey().c_str(), 0, nullptr, 0, KEY_SET_VALUE, nullptr, &key, nullptr) ==
-            ERROR_SUCCESS)
-        {
-            RegSetValueExW(
-                key, L"WindowSize", 0, REG_BINARY, reinterpret_cast<const BYTE*>(&savedSize), sizeof(savedSize));
-            RegCloseKey(key);
-        }
+        SettingsStore::Put(MenuAppearanceKey(), L"WindowSize", REG_BINARY, &savedSize, sizeof(savedSize));
     }
 
     void SizeToContent()

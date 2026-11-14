@@ -4277,3 +4277,35 @@ msgstr "Hohe Qualität"
 #. Quality preset description (header)
 msgid "Sharpest picture. For dedicated GPUs."
 msgstr "Schärfstes Bild. Für dedizierte GPUs."
+
+#. Section heading (Profiles)
+msgid "Settings File"
+msgstr "Einstellungsdatei"
+
+#. Setting name (Profiles > Settings File)
+msgid "Settings Folder"
+msgstr "Einstellungsordner"
+
+#. Setting description (Profiles > Settings File > Settings Folder)
+msgid "Opens the folder with Settings.ini."
+msgstr "Öffnet den Ordner mit der Settings.ini."
+
+#. Button (Profiles > Settings File > Settings Folder)
+msgid "Open"
+msgstr "Öffnen"
+
+#. Setting name (Profiles > Settings File)
+msgid "Import Settings"
+msgstr "Einstellungen importieren"
+
+#. Setting description (Profiles > Settings File > Import Settings)
+msgid "Loads settings from an INI file."
+msgstr "Lädt Einstellungen aus einer INI-Datei."
+
+#. Setting name (Profiles > Settings File)
+msgid "Export Settings"
+msgstr "Einstellungen exportieren"
+
+#. Setting description (Profiles > Settings File > Export Settings)
+msgid "Saves settings to an INI file."
+msgstr "Speichert die Einstellungen in einer INI-Datei."
