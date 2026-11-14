@@ -3463,6 +3463,46 @@ msgstr "Mode d'affichage"
 msgid "Enter a display name (1 to 80 characters)."
 msgstr ""
 
+#. Section heading (Profiles)
+msgid "Settings File"
+msgstr ""
+
+#. Setting name (Profiles > Settings File)
+msgid "Settings Folder"
+msgstr ""
+
+#. Setting description (Profiles > Settings File > Settings Folder)
+msgid "Opens the folder with Settings.ini."
+msgstr ""
+
+#. Button (Profiles > Settings File > Settings Folder)
+msgid "Open"
+msgstr ""
+
+#. Setting name (Profiles > Settings File)
+msgid "Import Settings"
+msgstr ""
+
+#. Setting description (Profiles > Settings File > Import Settings)
+msgid "Loads settings from an INI file."
+msgstr ""
+
+#. Button (Profiles > Settings File > Import Settings)
+msgid "Import"
+msgstr ""
+
+#. Setting name (Profiles > Settings File)
+msgid "Export Settings"
+msgstr ""
+
+#. Setting description (Profiles > Settings File > Export Settings)
+msgid "Saves settings to an INI file."
+msgstr ""
+
+#. Button (Profiles > Settings File > Export Settings)
+msgid "Export"
+msgstr ""
+
 #. Setting name (Profiles > Profile)
 msgid "Name"
 msgstr ""
@@ -3794,14 +3834,6 @@ msgstr ""
 
 #. Menu text; keep %d and %s placeholders
 msgid "Rename"
-msgstr ""
-
-#. Menu text; keep %d and %s placeholders
-msgid "Import"
-msgstr ""
-
-#. Menu text; keep %d and %s placeholders
-msgid "Export"
 msgstr ""
 
 #. Menu text; keep %d and %s placeholders
