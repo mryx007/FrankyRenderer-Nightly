@@ -7,6 +7,8 @@
 #include <fstream>
 #include <iterator>
 #include <string>
+// A build label as Tools/build_label.py writes it for a test build.
+#define FRANKY_BUILD_LABEL L"Test 20261114-1200 abc1234+"
 #include "UI/Direct2DFrame.h"
 using Microsoft::WRL::ComPtr;
 
@@ -270,7 +272,7 @@ int wmain(int argc, wchar_t** argv)
         }
         wchar_t title[80];
         GetWindowTextW(host, title, 80);
-        if (wcscmp(title, L"FrankyRenderer"))
+        if (wcscmp(title, L"FrankyRenderer Test 20261114-1200 abc1234+"))
             return 12;
         if ((GetWindowLongPtrW(GetDlgItem(host, IDOK), GWL_STYLE) & BS_TYPEMASK) != BS_OWNERDRAW)
             return 13;

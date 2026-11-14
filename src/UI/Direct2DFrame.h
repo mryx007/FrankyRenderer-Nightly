@@ -8,6 +8,7 @@
 #include <windowsx.h>
 #include "Settings/SettingsLayout.h"
 #include "UI/MenuTheme.h"
+#include "UI/BuildInfo.h"
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "advapi32.lib")
 
@@ -167,6 +168,14 @@ class Direct2DFrame
             SetBkMode(dc, TRANSPARENT);
             SetTextColor(dc, MenuColorRef(CurrentMenuPalette().textMain));
             DrawTextW(dc, L"FrankyRenderer", -1, &bounds, DT_LEFT | DT_TOP | DT_SINGLELINE | DT_NOPREFIX);
+            // The version (or Nightly / test build) beside the name, quieter.
+            SIZE name = {};
+            GetTextExtentPoint32W(dc, L"FrankyRenderer", 14, &name);
+            auto rest = bounds;
+            rest.left += name.cx + MulDiv(10, int(GetDpiForWindow(control)), 96);
+            SetTextColor(dc, MenuColorRef(CurrentMenuPalette().textMuted));
+            DrawTextW(
+                dc, BuildLabel().c_str(), -1, &rest, DT_LEFT | DT_TOP | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
             SelectObject(dc, font);
             return;
         }
@@ -442,7 +451,7 @@ class Direct2DFrame
         };
         placeChrome(closeButton, client.right - px(48), 0, px(48), header);
         if (titleLabel)
-            placeChrome(titleLabel, px(16), px(8), std::max(0, std::min(px(240), int(client.right) - px(80))), px(24));
+            placeChrome(titleLabel, px(16), px(8), std::max(0, std::min(px(520), int(client.right) - px(80))), px(24));
         const int edge = px(6), corner = px(12), grip = px(20);
         const int right = int(client.right), bottom = int(client.bottom);
         const RECT edgeRects[] = {{right - grip, bottom - grip, right, bottom},
@@ -844,7 +853,7 @@ class Direct2DFrame
                                      WS_CHILD | WS_VISIBLE | SS_LEFT,
                                      16,
                                      8,
-                                     240,
+                                     520,
                                      24,
                                      host,
                                      nullptr,
@@ -901,7 +910,7 @@ class Direct2DFrame
                 SetWindowSubclass(handle, GripProc, 306, reinterpret_cast<DWORD_PTR>(this));
         }
         resizeGrip = resizeEdges.front();
-        SetWindowTextW(host, L"FrankyRenderer");
+        SetWindowTextW(host, BuildLabel().empty() ? L"FrankyRenderer" : (L"FrankyRenderer " + BuildLabel()).c_str());
         SizeToContent();
         Layout();
         InvalidateRect(host, nullptr, TRUE);
