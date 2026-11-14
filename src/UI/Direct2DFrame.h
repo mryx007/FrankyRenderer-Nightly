@@ -49,6 +49,7 @@ class Direct2DFrame
     bool closeHovered = false;
     HWND hoveredButton = nullptr; // OK or Cancel under the mouse
     HFONT titleFont = nullptr;
+    HFONT buildFont = nullptr; // Smaller, normal weight: the version beside the name.
     bool additionalPages = false, sizing = false;
     int rendererTab = 0;
     static constexpr int CloseId = 0x7f10;
@@ -168,12 +169,17 @@ class Direct2DFrame
             SetBkMode(dc, TRANSPARENT);
             SetTextColor(dc, MenuColorRef(CurrentMenuPalette().textMain));
             DrawTextW(dc, L"FrankyRenderer", -1, &bounds, DT_LEFT | DT_TOP | DT_SINGLELINE | DT_NOPREFIX);
-            // The version (or Nightly / test build) beside the name, quieter.
+            // The version (or Nightly / test build) beside the name: smaller, dimmed, on the same baseline.
             SIZE name = {};
             GetTextExtentPoint32W(dc, L"FrankyRenderer", 14, &name);
+            TEXTMETRICW nameMetrics = {}, labelMetrics = {};
+            GetTextMetricsW(dc, &nameMetrics);
+            SelectObject(dc, buildFont ? buildFont : titleFont);
+            GetTextMetricsW(dc, &labelMetrics);
             auto rest = bounds;
             rest.left += name.cx + MulDiv(10, int(GetDpiForWindow(control)), 96);
-            SetTextColor(dc, MenuColorRef(CurrentMenuPalette().textMuted));
+            rest.top += nameMetrics.tmAscent - labelMetrics.tmAscent;
+            SetTextColor(dc, MenuColorRef(CurrentMenuPalette().textDim));
             DrawTextW(
                 dc, BuildLabel().c_str(), -1, &rest, DT_LEFT | DT_TOP | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
             SelectObject(dc, font);
@@ -873,6 +879,20 @@ class Direct2DFrame
                                 CLEARTYPE_QUALITY,
                                 0,
                                 L"Segoe UI");
+        buildFont = CreateFontW(-MulDiv(11, int(GetDpiForWindow(host)), 96),
+                                0,
+                                0,
+                                0,
+                                FW_NORMAL,
+                                FALSE,
+                                FALSE,
+                                FALSE,
+                                DEFAULT_CHARSET,
+                                0,
+                                0,
+                                CLEARTYPE_QUALITY,
+                                0,
+                                L"Segoe UI");
         SendMessageW(titleLabel, WM_SETFONT, reinterpret_cast<WPARAM>(titleFont), TRUE);
         SetWindowSubclass(titleLabel, ChromeProc, 308, reinterpret_cast<DWORD_PTR>(this));
         SetWindowSubclass(closeButton, ChromeProc, 308, reinterpret_cast<DWORD_PTR>(this));
@@ -951,6 +971,11 @@ class Direct2DFrame
         {
             DeleteObject(titleFont);
             titleFont = nullptr;
+        }
+        if (buildFont)
+        {
+            DeleteObject(buildFont);
+            buildFont = nullptr;
         }
         if (host && IsWindow(host))
         {
