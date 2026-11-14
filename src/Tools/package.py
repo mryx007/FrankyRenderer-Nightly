@@ -74,13 +74,18 @@ def main(out=OUT, source=SOURCE):
 
     for name in ("Install.cmd", "Uninstall.cmd"):
         shutil.copy2(ROOT / "Tools" / name, out / name)
-    setup = (ROOT / "Tools/setup.ps1").read_text(encoding="utf-8-sig")
-    (out / "setup.ps1").write_text(setup, encoding="utf-8-sig")
+    # The earlier PowerShell installer, when a stage is reused.
+    (out / "setup.ps1").unlink(missing_ok=True)
+    shutil.rmtree(out / "registration-backup", ignore_errors=True)
     (out / "INSTALL.txt").write_text(
         f"FrankyRenderer 1.1 - Windows x64\n\n"
         "Extract this package to a permanent folder and close all video players.\n"
-        "Run Install.cmd. Administrator approval may be requested.\n"
-        "Run Uninstall.cmd before moving or removing the installed folder.\n"
+        "Right-click Install.cmd and choose Run as administrator.\n"
+        "Run Uninstall.cmd the same way before moving or removing the installed folder.\n"
+        "Player packages: Install.cmd /s and Uninstall.cmd /s run without messages;\n"
+        "exit code 0 means success.\n"
+        "Settings are kept in %APPDATA%\\FrankyRenderer\\Settings.ini.\n"
+        "Uninstall.cmd asks whether to delete them; with /s it keeps them.\n"
         "No additional DV filter needs to be added in the player.\n"
         "Remove any previously configured Franky DV Filter from the player's preferred filters.\n\n"
         "Select FrankyRenderer in the player\'s video renderer settings.\n"
@@ -95,8 +100,6 @@ def main(out=OUT, source=SOURCE):
         "The decoder must deliver 10-bit P010 or native D3D11 surfaces.\n"
         "SDR/HDR10 and other Dolby Vision profiles retain their existing renderer path.\n"
         "The renderer reads the same local file for enhancement data. Network streams are not supported.\n\n"
-        "Existing installations with the same identity must be uninstalled first;\n"
-        "the installer refuses to overwrite another installation.\n\n"
         "Tested on Windows 11 x64. Windows 10 x64 is expected to work but is untested.\n"
         "Keep all runtime DLLs and shaders beside FrankyRenderer.ax.\n"
         "See LICENSE, THIRD_PARTY.md and licenses for notices.\n"
@@ -145,7 +148,6 @@ def main(out=OUT, source=SOURCE):
         str(p.relative_to(out)).replace("\\", "/"): hashlib.sha256(p.read_bytes()).hexdigest()
         for p in out.rglob("*")
         if p.is_file()
-        and "registration-backup" not in p.parts
         and p.name != "build-manifest.json"
     }
     (out / "build-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
