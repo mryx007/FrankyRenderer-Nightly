@@ -84,8 +84,8 @@ struct RenderSettings
     float kneeAdaptation = .4f, splineContrast = .5f, kneeMinimum = .1f, kneeMaximum = .8f;
     float blackCutoff = 1, perceptualStrength = .8f, softclipKnee = .7f;
     bool showClipping = false;
-    int maximumFramesInFlight = 0;
     int presentAhead = 0;
+    int gpuQueue = 8;          // pictures Smooth Motion holds ahead, kept in the history
     int displayGammaCurve = 0; // 0=auto (sRGB), 1=BT.1886, 180-280=pure power x100
     int displayContrast = 0;   // BT.1886 display contrast, 0 = infinite
     int displayPrimaries = 0;  // 0=auto (BT.709), 1=SMPTE C, 2=EBU/PAL, 3=BT.2020, 4=DCI-P3, 5=Display P3
@@ -196,6 +196,12 @@ class PlaceboBackend
     void ShowStatistics(bool enabled);
     // The decoder marks the video as interlaced, whether or not it is deinterlaced.
     void SetSourceInterlaced(bool interlaced);
+    // Smooth Motion runs only to present every refresh in a window (no
+    // mixing): the statistics show it as off.
+    void SetRefreshRepeat(bool repeat);
+    // Ctrl+J: pictures waiting in the CPU Queue and, with Smooth Motion, the
+    // GPU Queue (gpuSize 0 = not in use).
+    void SetQueueFill(int cpu, int cpuSize, int gpu, int gpuSize);
     // Field order measured from the picture while deinterlacing: 0 unknown,
     // 1 top field first, 2 bottom field first (FieldOrderAnalysis.h).
     int DetectedFieldOrder() const;

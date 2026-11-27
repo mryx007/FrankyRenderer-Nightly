@@ -172,8 +172,9 @@ static PlaceboSettings Salvage(const PlaceboSettings& loaded)
         FIELD(colorAdjustment),
         FIELD(allowDelayedPeak),
         FIELD(scaling),
-        FIELD(maximumFramesInFlight),
         FIELD(presentAhead),
+        FIELD(cpuQueue),
+        FIELD(gpuQueue),
         FIELD(displayGammaCurve),
         FIELD(sdrGammaCurve),
         FIELD(hdrSdrGammaCurve),
@@ -436,11 +437,6 @@ PlaceboSettings LoadSettings(const std::wstring& display)
         settings.chromaScaler = static_cast<int>(value);
     size = 4;
     value = 0;
-    if (key.Query(L"MaximumFramesInFlight", &type, reinterpret_cast<BYTE*>(&value), &size) == ERROR_SUCCESS &&
-        type == REG_DWORD && size == 4 && value <= 16)
-        settings.maximumFramesInFlight = static_cast<int>(value);
-    size = 4;
-    value = 0;
     if (key.Query(L"ImagePosition", &type, reinterpret_cast<BYTE*>(&value), &size) == ERROR_SUCCESS &&
         type == REG_DWORD && size == 4 && value <= 2)
         settings.imagePosition = static_cast<int>(value);
@@ -454,6 +450,16 @@ PlaceboSettings LoadSettings(const std::wstring& display)
     if (key.Query(L"PresentAhead", &type, reinterpret_cast<BYTE*>(&value), &size) == ERROR_SUCCESS &&
         type == REG_DWORD && size == 4 && value <= 4)
         settings.presentAhead = static_cast<int>(value);
+    size = 4;
+    value = 0;
+    if (key.Query(L"CpuQueue", &type, reinterpret_cast<BYTE*>(&value), &size) == ERROR_SUCCESS && type == REG_DWORD &&
+        size == 4 && value >= 1 && value <= 32)
+        settings.cpuQueue = static_cast<int>(value);
+    size = 4;
+    value = 0;
+    if (key.Query(L"GpuQueue", &type, reinterpret_cast<BYTE*>(&value), &size) == ERROR_SUCCESS && type == REG_DWORD &&
+        size == 4 && value >= 2 && value <= 16)
+        settings.gpuQueue = static_cast<int>(value);
     size = 4;
     value = 0;
     if (key.Query(L"DisplayGammaCurve", &type, reinterpret_cast<BYTE*>(&value), &size) == ERROR_SUCCESS &&
@@ -566,9 +572,9 @@ HRESULT ValidateSettings(const PlaceboSettings& s)
         return E_INVALIDARG;
     if (!ValidScaling(s.scaling))
         return E_INVALIDARG;
-    if (s.maximumFramesInFlight < 0 || s.maximumFramesInFlight > 16)
-        return E_INVALIDARG;
     if (s.presentAhead < 0 || s.presentAhead > 4)
+        return E_INVALIDARG;
+    if (s.cpuQueue < 1 || s.cpuQueue > 32 || s.gpuQueue < 2 || s.gpuQueue > 16)
         return E_INVALIDARG;
     if ((s.displayGammaCurve != 0 && s.displayGammaCurve != 1 && !ValidGammaCurve(s.displayGammaCurve)) ||
         (s.sdrGammaCurve != 0 && !ValidGammaCurve(s.sdrGammaCurve)) ||
@@ -659,8 +665,8 @@ RenderSettings BackendSettings(const PlaceboSettings& s)
     out.colorAdjustment = !!s.colorAdjustment;
     out.scaling = s.scaling;
     ValidScaling(s.scaling, &out.motionRadius);
-    out.maximumFramesInFlight = s.maximumFramesInFlight;
     out.presentAhead = s.presentAhead;
+    out.gpuQueue = s.gpuQueue;
     out.displayGammaCurve = s.displayGammaCurve;
     out.sdrGammaCurve = s.sdrGammaCurve;
     out.hdrSdrGammaCurve = s.hdrSdrGammaCurve;
@@ -858,8 +864,9 @@ static HRESULT WriteSettings(const PlaceboSettings& s)
     save(L"DisplayDepth", REG_DWORD, &s.displayDepth, 4);
     save(L"MeasuredQuality", REG_DWORD, &s.measuredQuality, 4);
     save(L"QualityStamp", REG_DWORD, &s.qualityStamp, 4);
-    save(L"MaximumFramesInFlight", REG_DWORD, &s.maximumFramesInFlight, 4);
     save(L"PresentAhead", REG_DWORD, &s.presentAhead, 4);
+    save(L"CpuQueue", REG_DWORD, &s.cpuQueue, 4);
+    save(L"GpuQueue", REG_DWORD, &s.gpuQueue, 4);
     save(L"DisplayGammaCurve", REG_DWORD, &s.displayGammaCurve, 4);
     save(L"SdrGammaCurve", REG_DWORD, &s.sdrGammaCurve, 4);
     save(L"HdrSdrGammaCurve", REG_DWORD, &s.hdrSdrGammaCurve, 4);

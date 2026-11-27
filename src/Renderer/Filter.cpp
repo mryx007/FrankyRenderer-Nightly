@@ -172,6 +172,8 @@ STDMETHODIMP DecoderPin::GetAllocator(IMemAllocator** out)
             return hr;
         }
         ownAllocator = allocator;
+        // The queued pictures, the one presented and the one being decoded.
+        ownAllocator->SetMinimumBuffers(owner->cpuQueueSize.load() + 2);
         Trace("Decoder allocator provides IMediaSideData samples");
     }
     *out = m_pAllocator;
@@ -266,33 +268,59 @@ STDMETHODIMP DecoderPin::ReceiveConnection(IPin* connector, const AM_MEDIA_TYPE*
 {
     if (!connector || !type)
         return E_POINTER;
-    CAutoLock guard(m_pLock);
-    if (!m_Connected || connector != m_Connected)
-        return CRendererInputPin::ReceiveConnection(connector, type);
+    // A larger picture needs larger buffers, which the queued pictures still
+    // hold: present those first. A paused renderer holds one until Run; then
+    // the buffer check below decides, as before the queue existed.
+    if (m_Connected && connector == m_Connected && !nativeDecoder && ownAllocator &&
+        m_pAllocator == static_cast<IMemAllocator*>(ownAllocator))
+    {
+        CMediaType probe(*type);
+        MediaFormat next;
+        ALLOCATOR_PROPERTIES have = {};
+        if (SUCCEEDED(ParseFormat(probe, next)) && SUCCEEDED(ownAllocator->GetProperties(&have)) &&
+            size_t(have.cbBuffer) < ImageBytes(next.frame.format, next.frame.stride, next.frame.height))
+            owner->inbound.WaitDrained(std::chrono::milliseconds(2000));
+    }
     CMediaType changed(*type);
     MediaFormat candidate;
-    HRESULT hr = ParseFormat(changed, candidate);
-    if (SUCCEEDED(hr))
-        hr = CheckMediaType(&changed);
-    // A decoder's own allocator is its business; ours must fit the new picture.
-    if (hr == S_OK && !nativeDecoder && ownAllocator && m_pAllocator == static_cast<IMemAllocator*>(ownAllocator))
+    HRESULT hr = S_OK;
     {
-        const size_t bytes = ImageBytes(candidate.frame.format, candidate.frame.stride, candidate.frame.height);
-        hr = bytes > size_t(LONG_MAX) ? VFW_E_TYPE_NOT_ACCEPTED : ownAllocator->Grow(static_cast<long>(bytes));
+        CAutoLock guard(m_pLock);
+        if (!m_Connected || connector != m_Connected)
+            return CRendererInputPin::ReceiveConnection(connector, type);
+        hr = ParseFormat(changed, candidate);
+        if (SUCCEEDED(hr))
+            hr = CheckMediaType(&changed);
+        // A decoder's own allocator is its business; ours must fit the new picture.
+        if (hr == S_OK && !nativeDecoder && ownAllocator && m_pAllocator == static_cast<IMemAllocator*>(ownAllocator))
+        {
+            const size_t bytes = ImageBytes(candidate.frame.format, candidate.frame.stride, candidate.frame.height);
+            hr = bytes > size_t(LONG_MAX) ? VFW_E_TYPE_NOT_ACCEPTED : ownAllocator->Grow(static_cast<long>(bytes));
+        }
+        if (hr == S_OK)
+            hr = CBaseInputPin::SetMediaType(&changed);
     }
-    if (hr == S_OK)
-        hr = CBaseInputPin::SetMediaType(&changed);
+    // The renderer takes the type with the first picture after the queued ones.
     if (hr == S_OK)
     {
-        std::lock_guard lock(reconnectLock);
-        reconnected = changed;
-        hasReconnected = true;
+        Renderer::Inbound item;
+        item.kind = Renderer::Inbound::Kind::Format;
+        item.type = changed;
+        if (owner->IsStopped() || owner->Enqueue(std::move(item)) != S_OK)
+            DeliverReconnect(changed);
     }
     Trace("Reconnect during connection %dx%d result=%08lX",
           candidate.frame.width,
           candidate.frame.height,
           static_cast<unsigned long>(hr));
     return hr == S_OK || FAILED(hr) ? hr : VFW_E_TYPE_NOT_ACCEPTED;
+}
+
+void DecoderPin::DeliverReconnect(const CMediaType& type)
+{
+    std::lock_guard lock(reconnectLock);
+    reconnected = type;
+    hasReconnected = true;
 }
 
 bool DecoderPin::TakeReconnected(CMediaType& type)
@@ -371,6 +399,8 @@ STDMETHODIMP DecoderPin::BeginFlush()
     HRESULT hr = CRendererInputPin::BeginFlush();
     if (FAILED(hr))
         return hr;
+    // Pictures before the seek are not shown; a decoder waiting for room returns.
+    owner->ClearInbound();
     CAutoLock receive(&owner->receiveLock);
     owner->dv.ResetTimeline();
     CAutoLock render(&owner->m_RendererLock);
@@ -380,20 +410,65 @@ STDMETHODIMP DecoderPin::BeginFlush()
 
 STDMETHODIMP DecoderPin::NewSegment(REFERENCE_TIME start, REFERENCE_TIME stop, double rate)
 {
-    CAutoLock receive(&owner->receiveLock);
     if (owner->dv.Active() && rate != 1.0)
         return E_INVALIDARG;
+    // In stream order: the pictures queued before it keep their segment.
+    if (!owner->IsStopped())
+    {
+        Renderer::Inbound item;
+        item.kind = Renderer::Inbound::Kind::Segment;
+        item.start = start;
+        item.stop = stop;
+        item.rate = rate;
+        if (owner->Enqueue(std::move(item)) == S_OK)
+            return S_OK;
+    }
+    return DeliverSegment(start, stop, rate);
+}
+
+HRESULT DecoderPin::DeliverSegment(REFERENCE_TIME start, REFERENCE_TIME stop, double rate)
+{
+    CAutoLock receive(&owner->receiveLock);
     owner->NewSegment(start, rate);
     return CRendererInputPin::NewSegment(start, stop, rate);
 }
 
 STDMETHODIMP DecoderPin::EndOfStream()
 {
+    if (IsFlushing())
+        return S_FALSE;
+    // After the queued pictures.
+    Renderer::Inbound item;
+    item.kind = Renderer::Inbound::Kind::End;
+    const HRESULT hr = owner->Enqueue(std::move(item));
+    return hr == S_OK ? S_OK : DeliverEndOfStream();
+}
+
+HRESULT DecoderPin::DeliverEndOfStream()
+{
     CAutoLock receive(&owner->receiveLock);
     if (IsFlushing())
         return S_FALSE;
     HRESULT hr = owner->DrainFields();
     return FAILED(hr) ? hr : CRendererInputPin::EndOfStream();
+}
+
+STDMETHODIMP DecoderPin::Receive(IMediaSample* sample)
+{
+    if (!sample)
+        return E_POINTER;
+    // Refused while stopped or flushing, as by the base pin.
+    const HRESULT streaming = CheckStreaming();
+    if (streaming != S_OK)
+        return streaming;
+    Renderer::Inbound item;
+    item.sample = sample;
+    return owner->Enqueue(std::move(item));
+}
+
+HRESULT DecoderPin::DeliverSample(IMediaSample* sample)
+{
+    return CRendererInputPin::Receive(sample);
 }
 
 VideoWindow::VideoWindow(Renderer* renderer, CCritSec* lock, IUnknown* outer, HRESULT* hr)
@@ -1005,6 +1080,9 @@ Renderer::Renderer(IUnknown* outer, HRESULT* hr)
 
 Renderer::~Renderer()
 {
+    inbound.Close();
+    if (presenter.joinable())
+        presenter.join();
     Diagnostics::SetLive(nullptr);
     {
         std::lock_guard guard(LiveRenderers::lock);
@@ -1231,6 +1309,7 @@ void Renderer::ResetFields(bool preserveBlackBars, bool preserveVideo)
 
 HRESULT Renderer::BreakConnect()
 {
+    ClearInbound();
     dv.Cancel();
     dv.Disconnect();
     SetPreviewed(nullptr);
@@ -1408,6 +1487,109 @@ HRESULT Renderer::DrainFields()
     return hr;
 }
 
+HRESULT Renderer::Enqueue(Inbound&& item)
+{
+    try
+    {
+        std::call_once(presenterStarted, [this] { presenter = std::thread([this] { PresentInbound(); }); });
+    }
+    catch (const std::system_error&)
+    {
+        return E_OUTOFMEMORY;
+    }
+    const HRESULT failed = inboundError.load();
+    if (FAILED(failed))
+        return failed;
+    // Stream events never wait behind a full queue of pictures.
+    const int limit = cpuQueueSize.load() + (item.kind == Inbound::Kind::Sample ? 0 : 1);
+    return inbound.Push(std::move(item), limit) ? S_OK : S_FALSE;
+}
+
+bool Renderer::PresentFromGpuQueue()
+{
+    CAutoLock receive(&receiveLock);
+    {
+        CAutoLock render(&m_RendererLock);
+        // Smooth Motion keeps the pictures it mixes with; the rest may be shown.
+        if (!smoothBuffering || m_State != State_Running || m_pInputPin->IsFlushing() ||
+            motionQueue.size() <= static_cast<size_t>(bufferedLookahead))
+            return false;
+    }
+    const HRESULT hr = DeliverQueuedMotion();
+    return SUCCEEDED(hr) && hr != S_FALSE;
+}
+
+void Renderer::ClearInbound()
+{
+    inbound.Clear();
+    inboundError = S_OK;
+}
+
+void Renderer::PresentInbound()
+{
+    const HRESULT com = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    SetThreadDescription(GetCurrentThread(), L"FrankyRenderer presentation");
+    // It waits for refreshes most of the time; when a picture is due, it must
+    // not wait for the decoder's threads.
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+    auto* pin = static_cast<DecoderPin*>(m_pInputPin);
+    Inbound item;
+    uint64_t generation = 0;
+    for (;;)
+    {
+        if (!inbound.TryPop(item, generation))
+        {
+            if (PresentFromGpuQueue())
+                continue;
+            if (!inbound.Pop(item, generation))
+                break;
+        }
+        HRESULT hr = S_OK;
+        if (inbound.Current(generation))
+            switch (item.kind)
+            {
+            case Inbound::Kind::Sample:
+                hr = pin->DeliverSample(item.sample.Get());
+                break;
+            case Inbound::Kind::Segment:
+                hr = pin->DeliverSegment(item.start, item.stop, item.rate);
+                break;
+            case Inbound::Kind::End:
+                hr = pin->DeliverEndOfStream();
+                break;
+            case Inbound::Kind::Format:
+                pin->DeliverReconnect(item.type);
+                break;
+            }
+        // Its buffer goes back to the decoder before the queue counts it as done.
+        item = {};
+        {
+            int gpu = 0, gpuSize = 0;
+            {
+                CAutoLock render(&m_RendererLock);
+                if (smoothBuffering)
+                {
+                    gpuSize = std::max(bufferedLookahead, gpuQueueSize.load());
+                    // The real fill: the backend keeps the history for it.
+                    gpu = int(motionQueue.size());
+                }
+            }
+            backend.SetQueueFill(inbound.Size(), cpuQueueSize.load(), gpu, gpuSize);
+        }
+        // An error ends the stream as on the decoder's thread: the decoder
+        // gets it with its next picture. Stopping and flushing are no errors.
+        if (FAILED(hr) && inbound.Current(generation) && !IsStopped() && !pin->IsFlushing())
+        {
+            HRESULT none = S_OK;
+            if (inboundError.compare_exchange_strong(none, hr))
+                Trace("Presentation of a queued picture failed result=%08lX", static_cast<unsigned long>(hr));
+        }
+        inbound.Done();
+    }
+    if (SUCCEEDED(com))
+        CoUninitialize();
+}
+
 HRESULT Renderer::Receive(IMediaSample* sample)
 {
     if (!sample)
@@ -1416,6 +1598,9 @@ HRESULT Renderer::Receive(IMediaSample* sample)
     const auto profileResult = UpdateDisplayProfile();
     if (FAILED(profileResult))
         return profileResult;
+    const auto repeatResult = UpdateWindowRepeat();
+    if (FAILED(repeatResult))
+        return repeatResult;
     AM_MEDIA_TYPE* changed = nullptr;
     // The type of a reconnect applies from this picture on, unless the sample
     // brings its own.
@@ -1697,7 +1882,11 @@ HRESULT Renderer::Receive(IMediaSample* sample)
             {
                 return E_OUTOFMEMORY;
             }
-            if (motionQueue.size() <= static_cast<size_t>(bufferedLookahead))
+            // While running it also fills the GPU Queue; a paused picture
+            // (after a seek) shows as soon as Smooth Motion has its frames.
+            const int fill =
+                m_State == State_Running ? std::max(bufferedLookahead, gpuQueueSize.load()) : bufferedLookahead;
+            if (motionQueue.size() <= static_cast<size_t>(fill))
                 return S_OK;
         }
         else
@@ -1714,7 +1903,24 @@ HRESULT Renderer::Receive(IMediaSample* sample)
         }
     }
     if (smooth)
-        return DeliverQueuedMotion();
+    {
+        HRESULT hr = DeliverQueuedMotion();
+        // A GPU Queue made smaller while playing still holds the pictures of
+        // the larger one: show one queued picture more per new one (each at
+        // its time) until it has the new size.
+        if (hr == S_OK)
+        {
+            bool over = false;
+            {
+                CAutoLock lock(&m_RendererLock);
+                over = m_State == State_Running && !m_pInputPin->IsFlushing() &&
+                       motionQueue.size() > static_cast<size_t>(std::max(bufferedLookahead, gpuQueueSize.load()));
+            }
+            if (over)
+                hr = DeliverQueuedMotion();
+        }
+        return hr;
+    }
     return output.id ? DeliverFields(output, past.id, future) : S_OK;
 }
 
@@ -1933,6 +2139,7 @@ HRESULT Renderer::ScheduleOnRefresh(IMediaSample* sample, REFERENCE_TIME* start,
     if (refreshQpc < qpcNow && ++lateTicks <= 12)
     {
         field->surplus = true;
+        ++leftOutTicks;
         presentLead.Tight(tickNow);
         Trace("Smooth Motion tick left out at stream %lld ms: arrived %.1f ms after its refresh",
               static_cast<long long>(wanted / 10000),
@@ -2421,7 +2628,7 @@ HRESULT Renderer::DoRenderSample(IMediaSample* sample)
             status.rendered++;
             if (field && field->field != PL_FIELD_NONE)
                 status.deinterlacedFields++;
-            if (field && field->motion && smoothEnabled)
+            if (field && field->motion && smoothEnabled && !refreshRepeat)
                 status.mixedFrames++;
         }
         status.hdrSource = pl_color_space_is_hdr(&frame.color);
@@ -2462,7 +2669,7 @@ HRESULT Renderer::DoRenderSample(IMediaSample* sample)
                                  : frame.color.transfer == PL_COLOR_TRC_HLG ? SourceSignal::HLG
                                  : pl_color_space_is_hdr(&frame.color)      ? SourceSignal::HDR10
                                                                             : SourceSignal::SDR;
-            diagnostics.smoothMotion = field && field->motion && smoothEnabled;
+            diagnostics.smoothMotion = field && field->motion && smoothEnabled && !refreshRepeat;
             diagnostics.displayHz = motionPeriod > 0 ? static_cast<float>(1e7 / motionPeriod.load()) : 0;
             diagnostics.deinterlacing = field && field->field != PL_FIELD_NONE ? settings.deinterlacing : 0;
             diagnostics.sourcePeak = frame.color.hdr.max_luma;
@@ -2738,6 +2945,8 @@ HRESULT Renderer::BeginFlush()
 
 HRESULT Renderer::EndFlush()
 {
+    // Whatever arrived while flushing belongs before the seek.
+    ClearInbound();
     dv.Resume();
     ResetFields();
     return CBaseVideoRenderer::EndFlush();
@@ -2753,7 +2962,11 @@ STDMETHODIMP Renderer::Stop()
     stepHeld = false;
     SetPreviewed(nullptr);
     ClearFileMetadata();
+    // Release a decoder waiting for room; what it delivers until the state
+    // changes is dropped below.
+    ClearInbound();
     HRESULT hr = CBaseVideoRenderer::Stop();
+    ClearInbound();
     if (SUCCEEDED(hr))
     {
         windowState = State_Stopped;
@@ -2768,6 +2981,11 @@ STDMETHODIMP Renderer::Stop()
         CAutoLock lock(&m_RendererLock);
         ResetFields();
     }
+    // The presentation thread may still be handling a picture, and as a paused
+    // preview keep it after the release above; a reconnect right after Stop
+    // must find all buffers back with the decoder.
+    inbound.WaitDrained(std::chrono::milliseconds(500));
+    SetPreviewed(nullptr);
     // Stop also occurs during an audio-track rebuild. It ends scheduling,
     // not the video connection: discard temporal inputs but leave the last
     // presented swapchain surface alone until a new picture arrives.
@@ -2833,6 +3051,9 @@ STDMETHODIMP Renderer::Pause()
             dv.Resume();
     }
     HRESULT hr = CBaseVideoRenderer::Pause();
+    // The presentation thread may have handed over a playing picture between
+    // the reset above and the state change: start over once more.
+    backend.ResetPresentationMeasurement();
     Trace("Renderer base pause returned result=%08lX", static_cast<unsigned long>(hr));
     if (SUCCEEDED(hr))
         windowState = State_Paused;
@@ -3654,6 +3875,41 @@ HRESULT Renderer::UpdateDisplayProfile(bool refresh)
     return S_OK;
 }
 
+// Fullscreen (the player covers its display) is shown without the desktop
+// compositor; in a window every picture goes through it (Effective).
+HRESULT Renderer::UpdateWindowRepeat()
+{
+    if (!window || !window->WindowExists())
+        return S_OK;
+    const auto root = GetAncestor(window->GetWindowHWND(), GA_ROOT);
+    RECT area = {};
+    MONITORINFO info = {sizeof(info)};
+    if (!root || !GetWindowRect(root, &area) ||
+        !GetMonitorInfoW(MonitorFromWindow(root, MONITOR_DEFAULTTONEAREST), &info))
+        return S_OK;
+    const auto& screen = info.rcMonitor;
+    // Tests take their small window for fullscreen unless they test this.
+    static const bool testFullscreen = []
+    {
+        wchar_t root[2], fullscreen[2];
+        return GetEnvironmentVariableW(L"PLACEBO_RENDERER_TEST_ROOT", root, 2) &&
+               GetEnvironmentVariableW(L"PLACEBO_RENDERER_TEST_FULLSCREEN", fullscreen, 2);
+    }();
+    const bool windowed = !testFullscreen && (area.left > screen.left || area.top > screen.top ||
+                                              area.right < screen.right || area.bottom < screen.bottom);
+    if (windowed == windowRepeat.load())
+        return S_OK;
+    CAutoLock guard(&m_InterfaceLock);
+    if (windowed == windowRepeat.load())
+        return S_OK;
+    windowRepeat = windowed;
+    const HRESULT hr = backend.SetSettings(BackendSettings(Effective(settings)));
+    UpdateMotionSettings();
+    Trace(
+        "Video %s: %s", windowed ? "in a window" : "fullscreen", refreshRepeat ? "presented every refresh" : "as set");
+    return hr;
+}
+
 bool Renderer::KeepDolbyVision(const VideoFrame& base) const
 {
     return KeepsDolbyVision(base, dolbyVisionPreferred, dv.SourceInfo().profile);
@@ -3668,7 +3924,11 @@ void Renderer::UpdateMotionSettings()
     // Switching Smooth Motion restarts the clock statistics.
     if (smoothEnabled.exchange(!!effective.smoothMotion) != !!effective.smoothMotion)
         backend.ResetClockMeasurement();
+    refreshRepeat = windowRepeat && !ContentProfiles::Apply(settings, contentProfile).smoothMotion;
+    backend.SetRefreshRepeat(refreshRepeat);
     presentAheadSetting = effective.presentAhead;
+    cpuQueueSize = effective.cpuQueue;
+    gpuQueueSize = effective.gpuQueue;
     motionRadius = BackendSettings(effective).motionRadius;
     motionLookahead = std::max(2, static_cast<int>(std::ceil(motionRadius.load())) + 1);
 }
@@ -3905,6 +4165,11 @@ STDMETHODIMP Renderer::Flt_GetInt(LPCSTR field, int* value)
         *value = m_State;
         return S_OK;
     }
+    if (!strcmp(field, "placeboRefreshRepeat"))
+    {
+        *value = refreshRepeat;
+        return S_OK;
+    }
     return E_INVALIDARG;
 }
 
@@ -3972,6 +4237,13 @@ STDMETHODIMP Renderer::Flt_GetInt64(LPCSTR field, __int64* value)
         }
         else if (!strcmp(field, "placeboStatsDrops"))
             *value = stats.drops;
+        else if (!strcmp(field, "placeboStatsLeftOutTicks"))
+            *value = static_cast<__int64>(leftOutTicks.load());
+        else if (!strcmp(field, "placeboStatsGpuQueued"))
+        {
+            CAutoLock render(&m_RendererLock);
+            *value = smoothBuffering ? static_cast<__int64>(motionQueue.size()) : 0;
+        }
         else if (!strcmp(field, "placeboStatsTimingActive"))
             *value = stats.timing;
         else if (!strcmp(field, "placeboStatsPending"))

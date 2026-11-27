@@ -150,14 +150,21 @@ msgstr "16 Bit"
 
 #. Setting name (General > Output)
 #. Setting name (Shortcuts > )
-msgid "Max Frames in Flight"
-msgstr "Maximal gleichzeitig verarbeitete Bilder"
+msgid "CPU Queue"
+msgstr "CPU-Warteschlange"
 
-#. Setting description (General > Output > Max Frames in Flight)
-msgid "0 retains the device default. More buffering increases latency."
-msgstr ""
-"0 verwendet den Standardwert des Geräts. Ein größerer Puffer erhöht die "
-"Latenz."
+#. Setting description (General > Output > CPU Queue)
+msgid "Decoded pictures kept ready. More smooths over decoder hiccups but uses more memory."
+msgstr "Decodierte Bilder auf Vorrat. Mehr überbrückt Aussetzer des Decoders, braucht aber mehr Speicher."
+
+#. Setting name (General > Output)
+#. Setting name (Shortcuts > )
+msgid "GPU Queue"
+msgstr "GPU-Warteschlange"
+
+#. Setting description (General > Output > GPU Queue)
+msgid "Pictures Smooth Motion uploads ahead. More uses more video memory."
+msgstr "Bilder, die Smooth Motion vorab auf die GPU lädt. Mehr braucht mehr Grafikspeicher."
 
 #. Section heading (General)
 #. Setting name (General > Image Analysis)

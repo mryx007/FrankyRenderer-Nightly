@@ -89,8 +89,9 @@ template <class F> void Visit(PlaceboSettings& s, F field)
     INI_FIELD(shaderAutoOrder);
     INI_FIELD(hdrMode);
     INI_FIELD(windowsHdrToggle);
-    INI_FIELD(maximumFramesInFlight);
     INI_FIELD(presentAhead);
+    INI_FIELD(cpuQueue);
+    INI_FIELD(gpuQueue);
     INI_FIELD(displayGammaCurve);
     INI_FIELD(sdrGammaCurve);
     INI_FIELD(hdrSdrGammaCurve);
@@ -365,7 +366,7 @@ inline PlaceboSettings Parse(const std::string& text)
         throw std::runtime_error("Unsupported settings file version.");
     entries.erase(version);
     // Settings that no longer exist; older files still load.
-    for (const char* retired : {"statisticsInVideo", "displayGamma", "sdrGamma"})
+    for (const char* retired : {"statisticsInVideo", "displayGamma", "sdrGamma", "maximumFramesInFlight"})
         entries.erase({"Renderer", retired});
     PlaceboSettings candidate;
     Visit(candidate,

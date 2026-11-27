@@ -1,0 +1,2 @@
+- Added CPU Queue and GPU Queue (General > Output); removed Max Frames in Flight.
+- Fixed stutter in a window without Smooth Motion on busy GPUs.

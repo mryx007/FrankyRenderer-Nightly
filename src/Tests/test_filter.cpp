@@ -92,6 +92,13 @@ static bool interlacedTest = false, bottomFirst = false, weaveTest = false, eosT
 static int mixedFields = 0;
 static bool flushRaceTest = false, rtxTest = false, rtxHdrTest = false;
 static bool frameStepTest = false;
+// A decoder that is fast enough on average but takes 250 ms longer for every
+// sixtieth picture (copy-back stalls). --small-queues: the buffering before
+// the CPU and GPU Queues existed, for comparison.
+static bool hiccupTest = false, smallQueues = false, queueChangeTest = false;
+// --window-repeat: the renderer sees the test window as a window (every
+// refresh presented); otherwise as fullscreen, the path the other tests check.
+static bool windowRepeatTest = false;
 // Screen recordings (issue 54): unchanged pictures are left out, so frames
 // arrive seconds apart. The pattern source sends two frames while playing,
 // then one every SparseFrame.
@@ -720,8 +727,10 @@ class PatternStream final : public CSourceStream
     {
         // The measurement starts after the other checks and needs pictures
         // still playing then: 20 s instead of 3 s.
-        if (index >= (eosTest || sparseTest ? 6u : measureTest ? 600u : 90u))
+        if (index >= (eosTest || sparseTest ? 6u : measureTest || queueChangeTest ? 600u : 90u))
             return S_FALSE;
+        if (hiccupTest && index > 30 && index % 60 == 0)
+            Sleep(250);
         BYTE* bytes = nullptr;
         HRESULT hr = sample->GetPointer(&bytes);
         if (FAILED(hr))
@@ -1101,6 +1110,14 @@ int wmain(int argc, wchar_t** argv)
     {
         if (wcscmp(argv[i], L"--frame-step") == 0)
             frameStepTest = true;
+        if (wcscmp(argv[i], L"--hiccup") == 0)
+            hiccupTest = true;
+        if (wcscmp(argv[i], L"--small-queues") == 0)
+            smallQueues = true;
+        if (wcscmp(argv[i], L"--queue-change") == 0)
+            queueChangeTest = true;
+        if (wcscmp(argv[i], L"--window-repeat") == 0)
+            windowRepeatTest = true;
         if (wcscmp(argv[i], L"--sparse") == 0)
             sparseTest = true;
         if (wcscmp(argv[i], L"--flush-race") == 0)
@@ -1133,6 +1150,8 @@ int wmain(int argc, wchar_t** argv)
         if (wcscmp(argv[i], L"--field-duration") == 0)
             mixedFields = 3;
     }
+    if (!windowRepeatTest)
+        SetEnvironmentVariableW(L"PLACEBO_RENDERER_TEST_FULLSCREEN", L"1");
     setvbuf(stdout, nullptr, _IONBF, 0);
     g_hInst = GetModuleHandleW(nullptr);
     Check(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED), "COM");
@@ -1305,6 +1324,11 @@ int wmain(int argc, wchar_t** argv)
     }
     settings.adaptiveSharpen = sharpenTest;
     settings.smoothMotion = motionTest;
+    if (smallQueues)
+    {
+        settings.cpuQueue = 1;
+        settings.gpuQueue = 2;
+    }
     settings.rtxSuperResolution = rtxTest;
     settings.rtxHdr = rtxHdrTest;
     settings.autoHdr = FALSE;
@@ -1942,6 +1966,21 @@ int wmain(int argc, wchar_t** argv)
         exit(31);
     printf(
         "PASS diagnostics: actual input size, GPU/CPU path, source metadata, frame count and buffer size validation\n");
+    {
+        // In a window, without Smooth Motion every refresh is presented like
+        // Smooth Motion, without mixing and shown as off (a compositor
+        // skipping refreshes under load); fullscreen keeps one per picture.
+        int repeat = -1;
+        Check(hostConfig->Flt_GetInt("placeboRefreshRepeat", &repeat), "refresh repeat state");
+        if (repeat != (windowRepeatTest && !motionTest ? 1 : 0) || !!actual.smoothMotion != motionTest)
+        {
+            printf("FAIL window refresh repeat=%d smoothMotion=%d\n", repeat, int(actual.smoothMotion));
+            return 60;
+        }
+        puts(motionTest         ? "PASS Smooth Motion stays as set in a window and fullscreen"
+             : windowRepeatTest ? "PASS a window without Smooth Motion presents every refresh, unmixed and shown as off"
+                                : "PASS fullscreen without Smooth Motion presents once per picture");
+    }
     printf(
         "PASS allocator HDR metadata write/read, recycled samples cleared, mastering 1000 nits and MaxCLL/MaxFALL\n");
     if (hardware)
@@ -2005,6 +2044,56 @@ int wmain(int argc, wchar_t** argv)
             }
         }
         puts("PASS live Smooth Motion off/on without stopping playback");
+    }
+    if (queueChangeTest)
+    {
+        // Larger queues, then back to the defaults, while playing.
+        for (auto [cpu, gpu] : {std::pair{32, 16}, std::pair{16, 8}, std::pair{32, 16}, std::pair{16, 8}})
+        {
+            settings.cpuQueue = cpu;
+            settings.gpuQueue = gpu;
+            Check(config->SetSettings(&settings), "live queue change");
+            UINT64 before = 0;
+            for (int step = 0; step < 150; ++step)
+            {
+                Sleep(10);
+                MSG msg;
+                while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE))
+                {
+                    TranslateMessage(&msg);
+                    DispatchMessageW(&msg);
+                }
+                if (step == 50)
+                {
+                    actual = {};
+                    Check(diagnosticConfig->GetDiagnostics(&actual), "queue change diagnostics");
+                    before = actual.frames;
+                }
+            }
+            actual = {};
+            Check(diagnosticConfig->GetDiagnostics(&actual), "queue change diagnostics");
+            printf("queue change cpu=%d gpu=%d frames %llu -> %llu\n",
+                   cpu,
+                   gpu,
+                   (unsigned long long)before,
+                   (unsigned long long)actual.frames);
+            if (actual.frames < before + 10)
+            {
+                puts("FAIL live queue change stalled playback");
+                return 57;
+            }
+            // A smaller GPU Queue gives up its extra pictures within a second
+            // (one more while a new picture waits for the shown one).
+            __int64 gpuQueued = 0;
+            Check(hostConfig->Flt_GetInt64("placeboStatsGpuQueued", &gpuQueued), "GPU Queue fill");
+            printf("queue change gpu fill %lld\n", gpuQueued);
+            if (motionTest && gpuQueued > gpu + 1)
+            {
+                puts("FAIL smaller GPU Queue kept its extra pictures");
+                return 58;
+            }
+        }
+        puts("PASS live CPU/GPU Queue change without stalling playback");
     }
     if (measureTest)
     {
@@ -2073,6 +2162,47 @@ int wmain(int argc, wchar_t** argv)
                repeatsAfter - repeats,
                glitchesAfter - glitches,
                droppedAfter - droppedBefore);
+    }
+    if (hiccupTest && measureTest)
+    {
+        // Twelve seconds of a decoder that stalls 250 ms every sixtieth picture.
+        ComPtr<IQualProp> quality;
+        Check(renderer->QueryInterface(IID_IQualProp, reinterpret_cast<void**>(quality.GetAddressOf())),
+              "hiccup quality interface");
+        const auto pumpFor = [](DWORD ms)
+        {
+            const auto until = GetTickCount64() + ms;
+            while (GetTickCount64() < until)
+            {
+                MSG msg;
+                while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE))
+                {
+                    TranslateMessage(&msg);
+                    DispatchMessageW(&msg);
+                }
+                Sleep(5);
+            }
+        };
+        __int64 repeats[2] = {}, glitches[2] = {}, confirmed[2] = {}, leftOut[2] = {};
+        int drops[2] = {};
+        pumpFor(1000);
+        for (int i = 0; i < 2; i++)
+        {
+            if (i)
+                pumpFor(12000);
+            Check(hostConfig->Flt_GetInt64("placeboStatsRepeats", &repeats[i]), "hiccup repeats");
+            Check(hostConfig->Flt_GetInt64("placeboStatsGlitches", &glitches[i]), "hiccup glitches");
+            Check(hostConfig->Flt_GetInt64("placeboStatsConfirmed", &confirmed[i]), "hiccup confirmed");
+            Check(hostConfig->Flt_GetInt64("placeboStatsLeftOutTicks", &leftOut[i]), "hiccup left-out ticks");
+            Check(quality->get_FramesDroppedInRenderer(&drops[i]), "hiccup drops");
+        }
+        printf("MEASURE hiccup decoder over 12 s: repeats +%lld late +%lld drops +%d left-out ticks +%lld "
+               "(confirmed presents +%lld)\n",
+               repeats[1] - repeats[0],
+               glitches[1] - glitches[0],
+               drops[1] - drops[0],
+               leftOut[1] - leftOut[0],
+               confirmed[1] - confirmed[0]);
     }
     double renderMs = 0, presentMs = 0;
     Check(hostConfig->Flt_GetDouble("placeboStatsRenderCpuMs", &renderMs), "render CPU measurement");
@@ -2552,7 +2682,7 @@ int wmain(int argc, wchar_t** argv)
     persist.softclipKnee = .65f;
     persist.showClipping = TRUE;
     persist.imageAnalysis = TRUE;
-    persist.maximumFramesInFlight = 7;
+    persist.cpuQueue = 7;
     persist.toneMapping = 2;
     persist.hdrNits = 600;
     persist.antiringing = .6f;
@@ -2606,7 +2736,7 @@ int wmain(int argc, wchar_t** argv)
     PlaceboSettings readback;
     Check(secondConfig->GetSettings(&readback), "saved readback");
     if (wcscmp(readback.displayProfile, persist.displayProfile) || !readback.allowDelayedPeak ||
-        readback.maximumFramesInFlight != 7 || readback.kneeAdaptation != .7f || readback.splineContrast != .8f ||
+        readback.cpuQueue != 7 || readback.kneeAdaptation != .7f || readback.splineContrast != .8f ||
         readback.kneeMinimum != .2f || readback.kneeMaximum != .9f || readback.blackCutoff != 2 ||
         readback.perceptualStrength != .6f || readback.softclipKnee != .65f || !readback.showClipping ||
         !readback.imageAnalysis || readback.adaptiveSharpen != TRUE || readback.sharpenStrength != .75f ||

@@ -144,15 +144,6 @@ msgstr ""
 msgid "16 Bit"
 msgstr ""
 
-#. Setting name (General > Output)
-#. Setting name (Shortcuts > )
-msgid "Max Frames in Flight"
-msgstr ""
-
-#. Setting description (General > Output > Max Frames in Flight)
-msgid "0 retains the device default. More buffering increases latency."
-msgstr ""
-
 #. Section heading (General)
 #. Setting name (General > Image Analysis)
 #. Setting name (Shortcuts > )

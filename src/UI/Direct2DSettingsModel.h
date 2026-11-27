@@ -325,13 +325,21 @@ inline std::vector<D2DPage> BuildD2DPages(PlaceboSettings& s)
         for (int i = 0; i < int(std::size(DisplayDepths)); i++)
             depths.push_back({DisplayDepths[i], DepthChoices[i]});
         c.controls.push_back(D2DChoice(s, L"Dither Target Bit Depth", &s.displayDepth, depths));
+        c.controls.push_back(
+            D2DNumber(s,
+                      L"CPU Queue",
+                      &s.cpuQueue,
+                      1,
+                      32,
+                      1,
+                      L"Decoded pictures kept ready. More smooths over decoder hiccups but uses more memory."));
         c.controls.push_back(D2DNumber(s,
-                                       L"Max Frames in Flight",
-                                       &s.maximumFramesInFlight,
-                                       0,
+                                       L"GPU Queue",
+                                       &s.gpuQueue,
+                                       2,
                                        16,
                                        1,
-                                       L"0 retains the device default. More buffering increases latency."));
+                                       L"Pictures Smooth Motion uploads ahead. More uses more video memory."));
         auto& analysis = card(p, L"Image Analysis");
         auto scope = D2DBool(s, L"Image Analysis", &s.imageAnalysis);
         scope.desc =

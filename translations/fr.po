@@ -151,17 +151,6 @@ msgstr "12 bits"
 msgid "16 Bit"
 msgstr "16 bits"
 
-#. Setting name (General > Output)
-#. Setting name (Shortcuts > )
-msgid "Max Frames in Flight"
-msgstr "Trames maximales en file d'attente"
-
-#. Setting description (General > Output > Max Frames in Flight)
-msgid "0 retains the device default. More buffering increases latency."
-msgstr ""
-"0 conserve la valeur par défaut du périphérique. Une mise en mémoire tampon "
-"plus importante augmente la latence."
-
 #. Section heading (General)
 #. Setting name (General > Image Analysis)
 #. Setting name (Shortcuts > )

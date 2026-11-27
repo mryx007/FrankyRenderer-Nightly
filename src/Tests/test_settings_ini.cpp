@@ -46,8 +46,9 @@ int wmain()
         original.brightness = .125f;
         original.saturation = 1.2345678f;
         original.autoHdr = FALSE;
-        original.maximumFramesInFlight = 6;
         original.presentAhead = 3;
+        original.cpuQueue = 24;
+        original.gpuQueue = 5;
         original.sdrGammaCurve = 235;
         original.hdrSdrGammaCurve = 1;
         original.displayGammaCurve = 1;
@@ -78,7 +79,7 @@ int wmain()
         Require(restored.imageAnalysis, "Image analysis flag was lost");
         // Statistics in Video Area was removed; files that still have it load.
         auto retired = text;
-        retired.insert(retired.find("[Renderer]\r\n") + 12, "statisticsInVideo=1\r\n");
+        retired.insert(retired.find("[Renderer]\r\n") + 12, "maximumFramesInFlight=8\r\nstatisticsInVideo=1\r\n");
         Require(SettingsIni::Serialize(SettingsIni::Parse(retired)) == text, "Removed setting blocked an import");
         Require(restored.statisticsTextScale == 150, "Statistics text size was lost");
         Require(restored.useDolbyVision == FALSE && PlaceboSettings{}.useDolbyVision,
@@ -86,6 +87,7 @@ int wmain()
         Require(restored.useHdr10Plus == FALSE && PlaceboSettings{}.useHdr10Plus,
                 "Use HDR10+ was lost or is not on by default");
         Require(restored.presentAhead == 3, "Present in advance was lost");
+        Require(restored.cpuQueue == 24 && restored.gpuQueue == 5, "CPU or GPU Queue was lost");
         Require(restored.hdrSdrGammaCurve == 1 && PlaceboSettings{}.hdrSdrGammaCurve == 0,
                 "HDR to SDR Gamma Processing was lost or is not off by default");
         Require(restored.displayGammaCurve == 1 && restored.sdrGammaCurve == 235 && restored.displayContrast == 3000 &&

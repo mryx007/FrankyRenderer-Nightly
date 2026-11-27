@@ -137,11 +137,20 @@ msgstr ""
 
 #. Setting name (General > Output)
 #. Setting name (Shortcuts > )
-msgid "Max Frames in Flight"
+msgid "CPU Queue"
 msgstr ""
 
-#. Setting description (General > Output > Max Frames in Flight)
-msgid "0 retains the device default. More buffering increases latency."
+#. Setting description (General > Output > CPU Queue)
+msgid "Decoded pictures kept ready. More smooths over decoder hiccups but uses more memory."
+msgstr ""
+
+#. Setting name (General > Output)
+#. Setting name (Shortcuts > )
+msgid "GPU Queue"
+msgstr ""
+
+#. Setting description (General > Output > GPU Queue)
+msgid "Pictures Smooth Motion uploads ahead. More uses more video memory."
 msgstr ""
 
 #. Section heading (General)

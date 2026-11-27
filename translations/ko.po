@@ -150,12 +150,21 @@ msgstr "16비트"
 
 #. Setting name (General > Output)
 #. Setting name (Shortcuts > )
-msgid "Max Frames in Flight"
-msgstr "동시 처리 프레임 수"
+msgid "CPU Queue"
+msgstr "CPU 대기열"
 
-#. Setting description (General > Output > Max Frames in Flight)
-msgid "0 retains the device default. More buffering increases latency."
-msgstr "0은 기기 기본값을 유지합니다. 버퍼링을 늘리면 지연 시간이 증가합니다."
+#. Setting description (General > Output > CPU Queue)
+msgid "Decoded pictures kept ready. More smooths over decoder hiccups but uses more memory."
+msgstr "미리 준비해 두는 디코딩된 화면입니다. 많을수록 디코더 끊김을 잘 흡수하지만 메모리를 더 사용합니다."
+
+#. Setting name (General > Output)
+#. Setting name (Shortcuts > )
+msgid "GPU Queue"
+msgstr "GPU 대기열"
+
+#. Setting description (General > Output > GPU Queue)
+msgid "Pictures Smooth Motion uploads ahead. More uses more video memory."
+msgstr "부드러운 모션이 GPU에 미리 올려 두는 화면입니다. 많을수록 비디오 메모리를 더 사용합니다."
 
 #. Section heading (General)
 #. Setting name (General > Image Analysis)

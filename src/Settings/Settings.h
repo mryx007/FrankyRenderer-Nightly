@@ -55,9 +55,11 @@ struct PlaceboSettings
     // rolled off to the display peak; legacy 0 is migrated
     int hdrMode = 2;
     ScalingSettings scaling;
-    int maximumFramesInFlight = 0; // 0=retain the device's original DXGI latency
     // Smooth Motion refreshes presented in advance; 0=automatic, 1-4 fixed.
     int presentAhead = 0;
+    // CPU Queue: decoded pictures waiting for the presentation thread (1-32).
+    // GPU Queue: pictures Smooth Motion uploads ahead (2-16).
+    int cpuQueue = 16, gpuQueue = 8;
     // How the display decodes the signal: 0=auto (sRGB), 1=BT.1886 with the
     // display's contrast (0 = infinite, e.g. OLED), 180-260 = pure power x100.
     int displayGammaCurve = 0;

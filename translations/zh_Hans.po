@@ -147,12 +147,21 @@ msgstr "16 位"
 
 #. Setting name (General > Output)
 #. Setting name (Shortcuts > )
-msgid "Max Frames in Flight"
-msgstr "最大在途帧数"
+msgid "CPU Queue"
+msgstr "CPU 队列"
 
-#. Setting description (General > Output > Max Frames in Flight)
-msgid "0 retains the device default. More buffering increases latency."
-msgstr "0 表示保留设备默认值。缓冲越多，延迟越高。"
+#. Setting description (General > Output > CPU Queue)
+msgid "Decoded pictures kept ready. More smooths over decoder hiccups but uses more memory."
+msgstr "预先准备好的已解码画面。越多越能缓冲解码器的卡顿，但占用更多内存。"
+
+#. Setting name (General > Output)
+#. Setting name (Shortcuts > )
+msgid "GPU Queue"
+msgstr "GPU 队列"
+
+#. Setting description (General > Output > GPU Queue)
+msgid "Pictures Smooth Motion uploads ahead. More uses more video memory."
+msgstr "平滑运动预先上传到 GPU 的画面。越多占用的显存越多。"
 
 #. Section heading (General)
 #. Setting name (General > Image Analysis)

@@ -21,9 +21,12 @@
 #include "Renderer/DisplayModes.h"
 #include "Renderer/WindowsHdrSwitch.h"
 #include "Settings/CustomShaders.h"
+#include "Renderer/InboundQueue.h"
+#include <wrl/client.h>
 #include <atomic>
 #include <map>
 #include <mutex>
+#include <thread>
 
 class Renderer;
 struct ModePause;
@@ -78,6 +81,14 @@ class DecoderPin final : public CRendererInputPin,
     STDMETHODIMP BeginFlush() override;
     STDMETHODIMP NewSegment(REFERENCE_TIME, REFERENCE_TIME, double) override;
     STDMETHODIMP EndOfStream() override;
+    // The decoder's pictures go to the CPU Queue; the presentation thread
+    // delivers them (Renderer::PresentInbound).
+    STDMETHODIMP Receive(IMediaSample*) override;
+    // Run on the presentation thread, in stream order.
+    HRESULT DeliverSample(IMediaSample*);
+    HRESULT DeliverSegment(REFERENCE_TIME, REFERENCE_TIME, double);
+    HRESULT DeliverEndOfStream();
+    void DeliverReconnect(const CMediaType&);
 };
 
 class VideoWindow final : public CBaseControlWindow
@@ -161,6 +172,39 @@ class Renderer final : public CBaseVideoRenderer,
     // Covers preprocessing and temporal delivery outside CBaseRenderer::Receive.
     // Flush/Stop must wake the base scheduler before waiting on this lock.
     CCritSec receiveLock;
+
+    // The CPU Queue between the decoder and the presentation thread, which
+    // does everything the decoder's thread did before: preprocessing,
+    // scheduling and presenting. The decoder only waits while it is full.
+    struct Inbound
+    {
+        enum class Kind
+        {
+            Sample,
+            Segment,
+            End,
+            Format
+        } kind = Kind::Sample;
+        Microsoft::WRL::ComPtr<IMediaSample> sample;
+        CMediaType type; // Format: a reconnect, for the pictures after it
+        REFERENCE_TIME start = 0, stop = 0;
+        double rate = 1;
+    };
+
+    InboundQueue<Inbound> inbound;
+    std::thread presenter;
+    std::once_flag presenterStarted;
+    std::atomic<int> cpuQueueSize = 16;
+    // The first error of the presentation thread, returned to the decoder.
+    std::atomic<HRESULT> inboundError = S_OK;
+    HRESULT Enqueue(Inbound&&);
+    void PresentInbound();
+    // While the decoder delivers nothing, Smooth Motion shows the pictures of
+    // its GPU Queue. True when it presented one.
+    bool PresentFromGpuQueue();
+    std::atomic<uint64_t> leftOutTicks = 0; // Smooth Motion ticks after their refresh
+    // Drops the queued pictures (flush, stop) and releases a waiting decoder.
+    void ClearInbound();
     std::unique_ptr<VideoWindow> window;
     std::unique_ptr<VideoControl> control;
     RECT source = {}, target = {};
@@ -242,6 +286,8 @@ class Renderer final : public CBaseVideoRenderer,
     std::vector<QueuedVideoFrame> motionQueue, motionPast;
     std::atomic<float> motionRadius = 0;
     std::atomic<int> motionLookahead = 2;
+    // GPU Queue: pictures Smooth Motion uploads before showing the first.
+    std::atomic<int> gpuQueueSize = 8;
     int bufferedLookahead = 2;
     HRESULT DeliverQueuedMotion();
     HRESULT DeliverMotion(const QueuedVideoFrame&,
@@ -272,8 +318,23 @@ class Renderer final : public CBaseVideoRenderer,
         if (shadersBypassed)
             for (auto& shader : result.userShaders.shaders)
                 shader.enabled = 0;
+        // In a window the desktop compositor skips refreshes under heavy GPU
+        // load, and a picture handed over once for its refresh then shows a
+        // refresh late. The Smooth Motion path presents every refresh ahead
+        // and rides that out; without its setting it only repeats pictures.
+        if (windowRepeat && !result.smoothMotion)
+        {
+            result.smoothMotion = TRUE;
+            strcpy_s(result.scaling.filters[4].filter, "none");
+        }
         return result;
     }
+
+    // The video window does not cover its display (UpdateWindowRepeat).
+    std::atomic<bool> windowRepeat = false;
+    // Smooth Motion runs only for windowRepeat: it shows as off.
+    std::atomic<bool> refreshRepeat = false;
+    HRESULT UpdateWindowRepeat();
 
     bool shadersBypassed = false;
     // Profile chosen with the "Next Profile" shortcut for the playing file:

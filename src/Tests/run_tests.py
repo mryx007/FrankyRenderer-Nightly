@@ -27,6 +27,7 @@ FILTER_FLAGS = (
     'flush-race', 'gpu', 'nv12', 'p016', 'srv', 'interlaced', 'bff', 'weave',
     'eos', 'yadif', 'force-bff', 'motion', 'sharpen', 'measure', 'startup',
     'mpcbe-owner', 'rtx', 'rtx-hdr', 'focus', 'mixed-weave', 'mixed-order', 'field-duration', 'frame-step', 'sparse',
+    'hiccup', 'small-queues', 'queue-change', 'window-repeat',
 )
 
 
@@ -76,7 +77,7 @@ def main():
         print('Native test PID', process.pid, flush=True)
         timed_out = False
         try:
-            output = process.communicate(timeout=6 if options.flush_race else 90 if options.test == 'test_quality_benchmark' else 35)[0]
+            output = process.communicate(timeout=6 if options.flush_race else 90 if options.test == 'test_quality_benchmark' else 60 if options.hiccup else 35)[0]
         except subprocess.TimeoutExpired:
             timed_out = True
             process.kill()

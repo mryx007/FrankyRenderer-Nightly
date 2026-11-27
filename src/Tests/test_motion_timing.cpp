@@ -1,9 +1,11 @@
 #define NOMINMAX
 #include "Renderer/MotionTiming.h"
+#include "Renderer/InboundQueue.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <thread>
 
 static void Check(bool ok, const char* text)
 {
@@ -292,4 +294,47 @@ int main()
         "PASS frames without Smooth Motion: 6 or 7 refreshes at 23.976 fps on 144 Hz despite jitter, 3:2 alternates, seeks anchor anew");
     puts(
         "PASS captured overlap, rounded film/50/59.94/60/120 fps, exact display grid, empty intervals, faster-source fallback, EOS and discontinuities");
+    {
+        // CPU Queue: in order, bounded, and a flush releases a waiting decoder.
+        InboundQueue<int> queue;
+        Check(queue.Push(1, 2) && queue.Push(2, 2) && queue.Size() == 2, "the decoder fills the queue");
+        bool released = false, pushed = true;
+        std::thread decoder(
+            [&]
+            {
+                pushed = queue.Push(3, 2);
+                released = true;
+            });
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        Check(!released, "a full queue holds the decoder");
+        int item = 0;
+        uint64_t generation = 0;
+        Check(queue.TryPop(item, generation) && item == 1 && queue.Current(generation), "pictures leave in order");
+        queue.Done();
+        decoder.join();
+        Check(pushed && queue.Size() == 2, "room lets the waiting picture in");
+        Check(queue.Pop(item, generation) && item == 2, "the next picture follows");
+        queue.Clear();
+        Check(!queue.Current(generation), "a picture taken before a flush is stale");
+        queue.Done();
+        Check(queue.Size() == 0 && !queue.TryPop(item, generation), "a flush drops the queued pictures");
+        Check(queue.Push(4, 1), "after the flush");
+        released = false;
+        std::thread waiting(
+            [&]
+            {
+                pushed = queue.Push(5, 1);
+                released = true;
+            });
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        queue.Clear();
+        waiting.join();
+        Check(released && !pushed, "a flush releases a waiting decoder without its picture");
+        Check(queue.WaitDrained(std::chrono::milliseconds(10)), "an empty queue is drained");
+        queue.Push(6, 1);
+        Check(!queue.WaitDrained(std::chrono::milliseconds(10)), "a queued picture is not drained");
+        queue.Close();
+        Check(!queue.Pop(item, generation), "closing ends the presentation thread");
+    }
+    puts("PASS CPU Queue: pictures in order, a full queue holds the decoder, a flush drops pictures and releases it");
 }

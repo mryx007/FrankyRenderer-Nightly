@@ -1,5 +1,6 @@
 #pragma once
 #include "Renderer/MediaSampleSideData.h"
+#include <algorithm>
 
 // The actual MPC/LAV side-data sample and MPC allocation loop are reused.
 // No MPC pixel processing or decoder implementation is involved.
@@ -23,12 +24,33 @@ class SideDataAllocator final : public CMemAllocator
     // with the next buffer (DirectShow dynamic format change from downstream).
     CMediaType pending;
     bool hasPending = false;
+    // The CPU Queue holds decoded pictures: the decoder needs that many
+    // buffers more than it asks for.
+    long minimumBuffers = 0;
 
   protected:
     HRESULT Alloc() override;
 
   public:
     explicit SideDataAllocator(HRESULT* hr) : CMemAllocator(NAME("libplacebo side-data allocator"), nullptr, hr) {}
+
+    void SetMinimumBuffers(long count)
+    {
+        CAutoLock guard(this);
+        minimumBuffers = count;
+    }
+
+    STDMETHODIMP SetProperties(ALLOCATOR_PROPERTIES* request, ALLOCATOR_PROPERTIES* actual) override
+    {
+        if (!request)
+            return E_POINTER;
+        ALLOCATOR_PROPERTIES wanted = *request;
+        {
+            CAutoLock guard(this);
+            wanted.cBuffers = (std::max)(wanted.cBuffers, minimumBuffers);
+        }
+        return CMemAllocator::SetProperties(&wanted, actual);
+    }
 
     void SetPendingType(const CMediaType& type)
     {

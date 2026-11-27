@@ -356,6 +356,8 @@ struct PlaceboBackend::State
     ImageAnalysis imageAnalysis;
     std::atomic<bool> showStatistics = false;
     std::atomic<bool> sourceInterlaced = false;
+    std::atomic<bool> refreshRepeat = false;
+    std::atomic<int> cpuQueued = 0, cpuQueueSize = 0, gpuQueued = 0, gpuQueueSize = 0;
     // Field of the picture being rendered, kept before RTX Video replaces the
     // picture with its progressive output; the statistics report this one.
     pl_field statisticsField = PL_FIELD_NONE;
@@ -831,7 +833,7 @@ struct PlaceboBackend::State
         const int lead = settings.presentAhead   ? settings.presentAhead
                          : settings.smoothMotion ? PresentLead::Maximum
                                                  : 0;
-        return std::max(settings.maximumFramesInFlight, lead > 2 ? lead + 1 : 0);
+        return lead > 2 ? lead + 1 : 0;
     }
 
     HRESULT ConfigureLatency()
@@ -1033,8 +1035,11 @@ struct PlaceboBackend::State
         description = displayedDescription;
         valid = wasValid;
         mixing = wasMixing;
+        // Smooth Motion's GPU Queue holds this many pictures ahead of the shown
+        // one; after the setting is lowered it holds more until it has shrunk.
+        const int ahead = std::max(settings.gpuQueue, gpuQueued.load());
         for (auto it = history.begin(); it != history.end();)
-            if (it->first + static_cast<uint64_t>(2 * std::ceil(settings.motionRadius) + 4) < id &&
+            if (it->first + static_cast<uint64_t>(2 * std::ceil(settings.motionRadius) + 4 + ahead) < id &&
                 !DisplayReferences(*it->second))
                 it = history.erase(it);
             else
@@ -1696,12 +1701,14 @@ struct PlaceboBackend::State
                                                    : L"off");
         {
             auto& value = row(L"Smooth motion");
-            if (mixing && settings.smoothMotion)
+            if (refreshRepeat)
+                value << L"off (settings)";
+            else if (mixing && settings.smoothMotion)
                 value << L"on (" << filterName(options->params.frame_mixer, "none", 4) << L")";
             else
                 value << (settings.smoothMotion ? L"off (not needed / no frame mix)" : L"off (settings)");
         }
-        if (mixing && settings.smoothMotion)
+        if (mixing && settings.smoothMotion && !refreshRepeat)
             filterValues(options->params.frame_mixer);
         {
             auto& value = row(L"Deinterlacing");
@@ -1822,6 +1829,13 @@ struct PlaceboBackend::State
                 value << L" / " << latency << L" (DXGI pending / limit)";
             else
                 value << L" (DXGI pending)";
+        }
+        if (cpuQueueSize > 0)
+        {
+            auto& value = row(L"Buffers");
+            value << L"CPU " << cpuQueued.load() << L"/" << cpuQueueSize.load();
+            if (gpuQueueSize > 0)
+                value << dot << L"GPU " << gpuQueued.load() << L"/" << gpuQueueSize.load();
         }
         if (statisticsDropped >= 0 || presentation.haveCounters)
         {
@@ -2588,6 +2602,13 @@ struct PlaceboBackend::State
         // still compiles once per scaling ratio step (its shared memory is
         // sized by the ratio), into the disk cache. Measured GPU cost: none.
         params.dynamic_constants = true;
+        // Hand each finished render step to the GPU (madVR: flush after
+        // intermediate render steps). One frame as one long submission keeps
+        // the desktop compositor off a GPU that cannot interrupt it finely
+        // (integrated AMD), and a window misses refreshes.
+        params.info_callback = [](void* priv, const pl_render_info*)
+        { static_cast<ID3D11DeviceContext*>(priv)->Flush(); };
+        params.info_priv = context.Get();
         params.color_adjustment = settings.colorAdjustment || sdrGammaCurve ? &adjustment : nullptr;
         // Default preserves the established output-calibration stage. Manual
         // LUT types use libplacebo's actual color-mapping LUT semantics.
@@ -3215,9 +3236,9 @@ HRESULT PlaceboBackend::SetSettings(const RenderSettings& settings)
     float radius = 0;
     if (settings.scaling && !ValidScaling(*settings.scaling, &radius))
         return E_INVALIDARG;
-    if (settings.maximumFramesInFlight < 0 || settings.maximumFramesInFlight > 16)
-        return E_INVALIDARG;
     if (settings.presentAhead < 0 || settings.presentAhead > 4)
+        return E_INVALIDARG;
+    if (settings.gpuQueue < 2 || settings.gpuQueue > 16)
         return E_INVALIDARG;
     if ((settings.displayGammaCurve != 0 && settings.displayGammaCurve != 1 &&
          !ValidGammaCurve(settings.displayGammaCurve)) ||
@@ -4246,9 +4267,22 @@ void PlaceboBackend::ShowStatistics(bool enabled)
     state->showStatistics = enabled;
 }
 
+void PlaceboBackend::SetRefreshRepeat(bool repeat)
+{
+    state->refreshRepeat = repeat;
+}
+
 void PlaceboBackend::SetSourceInterlaced(bool interlaced)
 {
     state->sourceInterlaced = interlaced;
+}
+
+void PlaceboBackend::SetQueueFill(int cpu, int cpuSize, int gpu, int gpuSize)
+{
+    state->cpuQueued = cpu;
+    state->cpuQueueSize = cpuSize;
+    state->gpuQueued = gpu;
+    state->gpuQueueSize = gpuSize;
 }
 
 void PlaceboBackend::MeasureFieldOrder(uint64_t current, uint64_t next)

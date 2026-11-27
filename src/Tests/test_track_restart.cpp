@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <atomic>
+#include <functional>
 #include <thread>
 using Microsoft::WRL::ComPtr;
 HINSTANCE g_hInst = nullptr;
@@ -76,6 +77,10 @@ class Source final : public CBaseFilter
             return allocator->SetProperties(props, &actual);
         }
 
+        // The renderer presents on its own thread (CPU Queue); the checks
+        // expect each picture handled when Send returns.
+        std::function<void()> delivered;
+
         void Send(int channel, int index)
         {
             ComPtr<IMediaSample> sample;
@@ -90,6 +95,8 @@ class Source final : public CBaseFilter
             sample->SetSyncPoint(TRUE);
             sample->SetActualDataLength(64 * 64 * 4);
             Check(Deliver(sample.Get()), "video sample");
+            if (delivered)
+                delivered();
         }
     } output;
 
@@ -127,6 +134,7 @@ class RendererRestartTest
               "screenshot graph");
         Check(graph->AddFilter(sourceRef.Get(), L"Source"), "add screenshot source");
         Check(graph->AddFilter(filter.Get(), L"Renderer"), "add screenshot renderer");
+        source->output.delivered = [renderer] { renderer->inbound.WaitDrained(std::chrono::milliseconds(2000)); };
         Check(graph->ConnectDirect(&source->output, renderer->GetPin(0), &source->output.type),
               "screenshot connection");
         HWND host = CreateWindowExW(0,
@@ -237,6 +245,7 @@ class RendererRestartTest
         Check(CoCreateInstance(CLSID_FilterGraph, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&graph)), "graph");
         Check(graph->AddFilter(sourceRef.Get(), L"Source"), "add source");
         Check(graph->AddFilter(filter.Get(), L"Renderer"), "add renderer");
+        source->output.delivered = [renderer] { renderer->inbound.WaitDrained(std::chrono::milliseconds(2000)); };
         Check(graph->ConnectDirect(&source->output, renderer->GetPin(0), &source->output.type), "video connection");
         HWND host = CreateWindowExW(0,
                                     L"STATIC",
