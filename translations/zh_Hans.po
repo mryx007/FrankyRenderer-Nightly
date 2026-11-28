@@ -151,7 +151,9 @@ msgid "CPU Queue"
 msgstr "CPU 队列"
 
 #. Setting description (General > Output > CPU Queue)
-msgid "Decoded pictures kept ready. More smooths over decoder hiccups but uses more memory."
+msgid ""
+"Decoded pictures kept ready. More smooths over decoder hiccups but uses more "
+"memory."
 msgstr "预先准备好的已解码画面。越多越能缓冲解码器的卡顿，但占用更多内存。"
 
 #. Setting name (General > Output)
