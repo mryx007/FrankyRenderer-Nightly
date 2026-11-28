@@ -196,9 +196,6 @@ class PlaceboBackend
     void ShowStatistics(bool enabled);
     // The decoder marks the video as interlaced, whether or not it is deinterlaced.
     void SetSourceInterlaced(bool interlaced);
-    // Smooth Motion runs only to present every refresh in a window (no
-    // mixing): the statistics show it as off.
-    void SetRefreshRepeat(bool repeat);
     // Ctrl+J: pictures waiting in the CPU Queue and, with Smooth Motion, the
     // GPU Queue (gpuSize 0 = not in use).
     void SetQueueFill(int cpu, int cpuSize, int gpu, int gpuSize);

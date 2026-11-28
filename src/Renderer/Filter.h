@@ -318,23 +318,8 @@ class Renderer final : public CBaseVideoRenderer,
         if (shadersBypassed)
             for (auto& shader : result.userShaders.shaders)
                 shader.enabled = 0;
-        // In a window the desktop compositor skips refreshes under heavy GPU
-        // load, and a picture handed over once for its refresh then shows a
-        // refresh late. The Smooth Motion path presents every refresh ahead
-        // and rides that out; without its setting it only repeats pictures.
-        if (windowRepeat && !result.smoothMotion)
-        {
-            result.smoothMotion = TRUE;
-            strcpy_s(result.scaling.filters[4].filter, "none");
-        }
         return result;
     }
-
-    // The video window does not cover its display (UpdateWindowRepeat).
-    std::atomic<bool> windowRepeat = false;
-    // Smooth Motion runs only for windowRepeat: it shows as off.
-    std::atomic<bool> refreshRepeat = false;
-    HRESULT UpdateWindowRepeat();
 
     bool shadersBypassed = false;
     // Profile chosen with the "Next Profile" shortcut for the playing file:

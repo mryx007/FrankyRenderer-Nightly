@@ -1598,9 +1598,6 @@ HRESULT Renderer::Receive(IMediaSample* sample)
     const auto profileResult = UpdateDisplayProfile();
     if (FAILED(profileResult))
         return profileResult;
-    const auto repeatResult = UpdateWindowRepeat();
-    if (FAILED(repeatResult))
-        return repeatResult;
     AM_MEDIA_TYPE* changed = nullptr;
     // The type of a reconnect applies from this picture on, unless the sample
     // brings its own.
@@ -2628,7 +2625,7 @@ HRESULT Renderer::DoRenderSample(IMediaSample* sample)
             status.rendered++;
             if (field && field->field != PL_FIELD_NONE)
                 status.deinterlacedFields++;
-            if (field && field->motion && smoothEnabled && !refreshRepeat)
+            if (field && field->motion && smoothEnabled)
                 status.mixedFrames++;
         }
         status.hdrSource = pl_color_space_is_hdr(&frame.color);
@@ -2669,7 +2666,7 @@ HRESULT Renderer::DoRenderSample(IMediaSample* sample)
                                  : frame.color.transfer == PL_COLOR_TRC_HLG ? SourceSignal::HLG
                                  : pl_color_space_is_hdr(&frame.color)      ? SourceSignal::HDR10
                                                                             : SourceSignal::SDR;
-            diagnostics.smoothMotion = field && field->motion && smoothEnabled && !refreshRepeat;
+            diagnostics.smoothMotion = field && field->motion && smoothEnabled;
             diagnostics.displayHz = motionPeriod > 0 ? static_cast<float>(1e7 / motionPeriod.load()) : 0;
             diagnostics.deinterlacing = field && field->field != PL_FIELD_NONE ? settings.deinterlacing : 0;
             diagnostics.sourcePeak = frame.color.hdr.max_luma;
@@ -3875,41 +3872,6 @@ HRESULT Renderer::UpdateDisplayProfile(bool refresh)
     return S_OK;
 }
 
-// Fullscreen (the player covers its display) is shown without the desktop
-// compositor; in a window every picture goes through it (Effective).
-HRESULT Renderer::UpdateWindowRepeat()
-{
-    if (!window || !window->WindowExists())
-        return S_OK;
-    const auto root = GetAncestor(window->GetWindowHWND(), GA_ROOT);
-    RECT area = {};
-    MONITORINFO info = {sizeof(info)};
-    if (!root || !GetWindowRect(root, &area) ||
-        !GetMonitorInfoW(MonitorFromWindow(root, MONITOR_DEFAULTTONEAREST), &info))
-        return S_OK;
-    const auto& screen = info.rcMonitor;
-    // Tests take their small window for fullscreen unless they test this.
-    static const bool testFullscreen = []
-    {
-        wchar_t root[2], fullscreen[2];
-        return GetEnvironmentVariableW(L"PLACEBO_RENDERER_TEST_ROOT", root, 2) &&
-               GetEnvironmentVariableW(L"PLACEBO_RENDERER_TEST_FULLSCREEN", fullscreen, 2);
-    }();
-    const bool windowed = !testFullscreen && (area.left > screen.left || area.top > screen.top ||
-                                              area.right < screen.right || area.bottom < screen.bottom);
-    if (windowed == windowRepeat.load())
-        return S_OK;
-    CAutoLock guard(&m_InterfaceLock);
-    if (windowed == windowRepeat.load())
-        return S_OK;
-    windowRepeat = windowed;
-    const HRESULT hr = backend.SetSettings(BackendSettings(Effective(settings)));
-    UpdateMotionSettings();
-    Trace(
-        "Video %s: %s", windowed ? "in a window" : "fullscreen", refreshRepeat ? "presented every refresh" : "as set");
-    return hr;
-}
-
 bool Renderer::KeepDolbyVision(const VideoFrame& base) const
 {
     return KeepsDolbyVision(base, dolbyVisionPreferred, dv.SourceInfo().profile);
@@ -3924,8 +3886,6 @@ void Renderer::UpdateMotionSettings()
     // Switching Smooth Motion restarts the clock statistics.
     if (smoothEnabled.exchange(!!effective.smoothMotion) != !!effective.smoothMotion)
         backend.ResetClockMeasurement();
-    refreshRepeat = windowRepeat && !ContentProfiles::Apply(settings, contentProfile).smoothMotion;
-    backend.SetRefreshRepeat(refreshRepeat);
     presentAheadSetting = effective.presentAhead;
     cpuQueueSize = effective.cpuQueue;
     gpuQueueSize = effective.gpuQueue;
@@ -4163,11 +4123,6 @@ STDMETHODIMP Renderer::Flt_GetInt(LPCSTR field, int* value)
     if (!strcmp(field, "playbackState"))
     {
         *value = m_State;
-        return S_OK;
-    }
-    if (!strcmp(field, "placeboRefreshRepeat"))
-    {
-        *value = refreshRepeat;
         return S_OK;
     }
     return E_INVALIDARG;

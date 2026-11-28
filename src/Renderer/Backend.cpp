@@ -356,7 +356,6 @@ struct PlaceboBackend::State
     ImageAnalysis imageAnalysis;
     std::atomic<bool> showStatistics = false;
     std::atomic<bool> sourceInterlaced = false;
-    std::atomic<bool> refreshRepeat = false;
     std::atomic<int> cpuQueued = 0, cpuQueueSize = 0, gpuQueued = 0, gpuQueueSize = 0;
     // Field of the picture being rendered, kept before RTX Video replaces the
     // picture with its progressive output; the statistics report this one.
@@ -1701,14 +1700,12 @@ struct PlaceboBackend::State
                                                    : L"off");
         {
             auto& value = row(L"Smooth motion");
-            if (refreshRepeat)
-                value << L"off (settings)";
-            else if (mixing && settings.smoothMotion)
+            if (mixing && settings.smoothMotion)
                 value << L"on (" << filterName(options->params.frame_mixer, "none", 4) << L")";
             else
                 value << (settings.smoothMotion ? L"off (not needed / no frame mix)" : L"off (settings)");
         }
-        if (mixing && settings.smoothMotion && !refreshRepeat)
+        if (mixing && settings.smoothMotion)
             filterValues(options->params.frame_mixer);
         {
             auto& value = row(L"Deinterlacing");
@@ -4265,11 +4262,6 @@ int PlaceboBackend::SharpenState() const
 void PlaceboBackend::ShowStatistics(bool enabled)
 {
     state->showStatistics = enabled;
-}
-
-void PlaceboBackend::SetRefreshRepeat(bool repeat)
-{
-    state->refreshRepeat = repeat;
 }
 
 void PlaceboBackend::SetSourceInterlaced(bool interlaced)

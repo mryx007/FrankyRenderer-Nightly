@@ -27,7 +27,7 @@ FILTER_FLAGS = (
     'flush-race', 'gpu', 'nv12', 'p016', 'srv', 'interlaced', 'bff', 'weave',
     'eos', 'yadif', 'force-bff', 'motion', 'sharpen', 'measure', 'startup',
     'mpcbe-owner', 'rtx', 'rtx-hdr', 'focus', 'mixed-weave', 'mixed-order', 'field-duration', 'frame-step', 'sparse',
-    'hiccup', 'small-queues', 'queue-change', 'window-repeat',
+    'hiccup', 'small-queues', 'queue-change',
 )
 
 

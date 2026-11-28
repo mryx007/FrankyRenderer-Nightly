@@ -96,9 +96,6 @@ static bool frameStepTest = false;
 // sixtieth picture (copy-back stalls). --small-queues: the buffering before
 // the CPU and GPU Queues existed, for comparison.
 static bool hiccupTest = false, smallQueues = false, queueChangeTest = false;
-// --window-repeat: the renderer sees the test window as a window (every
-// refresh presented); otherwise as fullscreen, the path the other tests check.
-static bool windowRepeatTest = false;
 // Screen recordings (issue 54): unchanged pictures are left out, so frames
 // arrive seconds apart. The pattern source sends two frames while playing,
 // then one every SparseFrame.
@@ -1116,8 +1113,6 @@ int wmain(int argc, wchar_t** argv)
             smallQueues = true;
         if (wcscmp(argv[i], L"--queue-change") == 0)
             queueChangeTest = true;
-        if (wcscmp(argv[i], L"--window-repeat") == 0)
-            windowRepeatTest = true;
         if (wcscmp(argv[i], L"--sparse") == 0)
             sparseTest = true;
         if (wcscmp(argv[i], L"--flush-race") == 0)
@@ -1150,8 +1145,6 @@ int wmain(int argc, wchar_t** argv)
         if (wcscmp(argv[i], L"--field-duration") == 0)
             mixedFields = 3;
     }
-    if (!windowRepeatTest)
-        SetEnvironmentVariableW(L"PLACEBO_RENDERER_TEST_FULLSCREEN", L"1");
     setvbuf(stdout, nullptr, _IONBF, 0);
     g_hInst = GetModuleHandleW(nullptr);
     Check(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED), "COM");
@@ -1966,21 +1959,6 @@ int wmain(int argc, wchar_t** argv)
         exit(31);
     printf(
         "PASS diagnostics: actual input size, GPU/CPU path, source metadata, frame count and buffer size validation\n");
-    {
-        // In a window, without Smooth Motion every refresh is presented like
-        // Smooth Motion, without mixing and shown as off (a compositor
-        // skipping refreshes under load); fullscreen keeps one per picture.
-        int repeat = -1;
-        Check(hostConfig->Flt_GetInt("placeboRefreshRepeat", &repeat), "refresh repeat state");
-        if (repeat != (windowRepeatTest && !motionTest ? 1 : 0) || !!actual.smoothMotion != motionTest)
-        {
-            printf("FAIL window refresh repeat=%d smoothMotion=%d\n", repeat, int(actual.smoothMotion));
-            return 60;
-        }
-        puts(motionTest         ? "PASS Smooth Motion stays as set in a window and fullscreen"
-             : windowRepeatTest ? "PASS a window without Smooth Motion presents every refresh, unmixed and shown as off"
-                                : "PASS fullscreen without Smooth Motion presents once per picture");
-    }
     printf(
         "PASS allocator HDR metadata write/read, recycled samples cleared, mastering 1000 nits and MaxCLL/MaxFALL\n");
     if (hardware)
