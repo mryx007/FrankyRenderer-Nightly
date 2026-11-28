@@ -151,6 +151,26 @@ msgstr "12 bits"
 msgid "16 Bit"
 msgstr "16 bits"
 
+#. Setting name (General > Output)
+#. Setting name (Shortcuts > )
+msgid "CPU Queue"
+msgstr ""
+
+#. Setting description (General > Output > CPU Queue)
+msgid ""
+"Decoded pictures kept ready. More smooths over decoder hiccups but uses more "
+"memory."
+msgstr ""
+
+#. Setting name (General > Output)
+#. Setting name (Shortcuts > )
+msgid "GPU Queue"
+msgstr ""
+
+#. Setting description (General > Output > GPU Queue)
+msgid "Pictures Smooth Motion uploads ahead. More uses more video memory."
+msgstr ""
+
 #. Section heading (General)
 #. Setting name (General > Image Analysis)
 #. Setting name (Shortcuts > )
